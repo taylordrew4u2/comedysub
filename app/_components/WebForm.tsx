@@ -1,0 +1,135 @@
+'use client';
+
+import { useActionState } from 'react';
+import { submitWebForm, type SubmitState } from '../actions';
+
+const initial: SubmitState = {};
+
+const inputClass =
+  'w-full rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-2 text-sm text-white placeholder:text-[#555] focus:border-[#DC143C] focus:outline-none focus:ring-1 focus:ring-[#DC143C]';
+const labelClass =
+  'block mb-1 text-xs font-semibold uppercase tracking-wider text-[#888]';
+
+export default function WebForm() {
+  const [state, formAction, isPending] = useActionState(submitWebForm, initial);
+
+  if (state.success) {
+    return (
+      <div className="rounded-xl border border-[#DC143C]/40 bg-[#DC143C]/10 p-8 text-center">
+        <div className="mb-3 text-4xl">🎉</div>
+        <h3 className="mb-2 text-xl font-bold text-white">Submission received!</h3>
+        <p className="text-[#aaa]">
+          Thanks for applying to Pins &amp; Needles Edinburgh Fringe.
+          We'll be in touch if you're shortlisted.
+        </p>
+        <p className="mt-4 text-sm text-[#666]">
+          Reference ID: <span className="font-mono font-bold text-[#DC143C]">#{state.refId}</span>
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <form action={formAction} className="space-y-5">
+      {state.error && (
+        <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          {state.error}
+        </div>
+      )}
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div>
+          <label className={labelClass}>Full Name *</label>
+          <input
+            name="name"
+            required
+            className={inputClass}
+            placeholder="Jane Doe"
+          />
+        </div>
+        <div>
+          <label className={labelClass}>City, Country *</label>
+          <input
+            name="location"
+            required
+            className={inputClass}
+            placeholder="London, UK"
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div>
+          <label className={labelClass}>Instagram Handle</label>
+          <input
+            name="instagram"
+            className={inputClass}
+            placeholder="@yourhandle"
+          />
+        </div>
+        <div>
+          <label className={labelClass}>Do you have tattoos? *</label>
+          <select name="has_tattoos" required className={inputClass} defaultValue="yes">
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label className={labelClass}>Availability at Edinburgh Fringe *</label>
+        <input
+          name="availability"
+          required
+          className={inputClass}
+          placeholder="e.g. 5–25 August, all dates / specific dates"
+        />
+      </div>
+
+      <div>
+        <label className={labelClass}>Comedy Experience *</label>
+        <input
+          name="experience"
+          required
+          className={inputClass}
+          placeholder="e.g. 3 years, open mics + festival support slots"
+        />
+      </div>
+
+      <div>
+        <label className={labelClass}>Video Link</label>
+        <input
+          name="video_url"
+          type="url"
+          className={inputClass}
+          placeholder="YouTube, Vimeo, Google Drive, Dropbox — any shareable link"
+        />
+        <p className="mt-1 text-[11px] text-[#555]">
+          Unlisted YouTube or any shareable link. No file upload needed.
+        </p>
+      </div>
+
+      <div>
+        <label className={labelClass}>Short Bio *</label>
+        <textarea
+          name="bio"
+          required
+          className={`${inputClass} min-h-[110px] resize-y`}
+          placeholder="Tell us who you are, your comedy style, and why Pins & Needles…"
+        />
+      </div>
+
+      <button
+        type="submit"
+        disabled={isPending}
+        className="w-full rounded-xl bg-[#DC143C] py-3 text-base font-bold text-white transition hover:bg-[#b01030] disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {isPending ? 'Submitting…' : 'Submit Application'}
+      </button>
+
+      <p className="text-center text-[11px] text-[#555]">
+        We read every submission. Response times vary — thanks for your patience.
+      </p>
+    </form>
+  );
+}

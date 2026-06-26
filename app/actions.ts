@@ -1,0 +1,124 @@
+'use server';
+
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
+import { insertSubmission, updateSubmission } from './lib/db';
+
+// ── Public Submission ──────────────────────────────────────────────────────────
+
+export interface SubmitState {
+  error?: string;
+  success?: boolean;
+  refId?: number;
+}
+
+export async function submitWebForm(
+  prevState: SubmitState,
+  formData: FormData,
+): Promise<SubmitState> {
+  const name = (formData.get('name') as string)?.trim();
+  const location = (formData.get('location') as string)?.trim();
+  const bio = (formData.get('bio') as string)?.trim();
+  const instagram = (formData.get('instagram') as string)?.trim() || null;
+  const has_tattoos = formData.get('has_tattoos') === 'yes';
+  const availability = (formData.get('availability') as string)?.trim();
+  const experience = (formData.get('experience') as string)?.trim();
+  const video_url = (formData.get('video_url') as string)?.trim() || null;
+
+  if (!name || !location || !bio || !availability || !experience) {
+    return { error: 'Please fill in all required fields.' };
+  }
+
+  try {
+    const { id } = await insertSubmission({
+      name,
+      location,
+      bio,
+      instagram,
+      has_tattoos,
+      availability,
+      experience,
+      video_url,
+      source: 'web',
+    });
+    return { success: true, refId: id };
+  } catch (err) {
+    console.error('DB error:', err);
+    return { error: 'Failed to save your submission. Please try again later.' };
+  }
+}
+
+// ── Admin Auth ─────────────────────────────────────────────────────────────────
+// Simple cookie-based admin authentication — designed for personal/solo admin use.
+// No external auth service required. Password stored in ADMIN_PASSWORD env var.
+
+export interface LoginState {
+  error?: string;
+}
+
+export async function adminLogin(
+  prevState: LoginState,
+  formData: FormData,
+): Promise<LoginState> {
+  const password = formData.get('password') as string;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (!adminPassword) {
+    return { error: 'ADMIN_PASSWORD environment variable is not configured.' };
+  }
+  if (password !== adminPassword) {
+    return { error: 'Incorrect password.' };
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set('admin_auth', 'true', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 60 * 60 * 24 * 7, // 7 days
+    path: '/',
+  });
+
+  redirect('/admin');
+}
+
+export async function adminLogout(): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.delete('admin_auth');
+  redirect('/admin');
+}
+
+// ── Admin Update Submission ────────────────────────────────────────────────────
+
+export interface UpdateState {
+  error?: string;
+  success?: boolean;
+}
+
+export async function updateSubmissionAction(
+  prevState: UpdateState,
+  formData: FormData,
+): Promise<UpdateState> {
+  const cookieStore = await cookies();
+  if (cookieStore.get('admin_auth')?.value !== 'true') {
+    return { error: 'Unauthorized' };
+  }
+
+  const id = parseInt(formData.get('id') as string, 10);
+  const status = formData.get('status') as string;
+  const admin_notes = (formData.get('admin_notes') as string) ?? '';
+
+  if (!id || !status) {
+    return { error: 'Missing required fields.' };
+  }
+
+  try {
+    await updateSubmission(id, status, admin_notes);
+    revalidatePath('/admin');
+    return { success: true };
+  } catch (err) {
+    console.error('Update error:', err);
+    return { error: 'Failed to update submission.' };
+  }
+}
