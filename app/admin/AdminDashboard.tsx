@@ -22,7 +22,6 @@ const STATUS_COLORS: Record<SubmissionStatus, string> = {
 
 const PAGE_SIZE = 25;
 
-// ── Per-row update form ────────────────────────────────────────────────────────
 function RowForm({ sub }: { sub: Submission }) {
   const initial: UpdateState = {};
   const [state, formAction, isPending] = useActionState(updateSubmissionAction, initial);
@@ -30,7 +29,6 @@ function RowForm({ sub }: { sub: Submission }) {
   return (
     <form action={formAction} className="flex flex-col gap-2">
       <input type="hidden" name="id" value={sub.id} />
-
       <select
         name="status"
         defaultValue={sub.status}
@@ -42,7 +40,6 @@ function RowForm({ sub }: { sub: Submission }) {
           </option>
         ))}
       </select>
-
       <textarea
         name="admin_notes"
         defaultValue={sub.admin_notes ?? ''}
@@ -50,7 +47,6 @@ function RowForm({ sub }: { sub: Submission }) {
         placeholder="Notes…"
         className="w-full rounded border border-[#2a2a2a] bg-[#1a1a1a] px-2 py-1 text-xs text-white placeholder:text-[#444] focus:outline-none focus:border-[#DC143C] resize-none"
       />
-
       <button
         type="submit"
         disabled={isPending}
@@ -58,44 +54,36 @@ function RowForm({ sub }: { sub: Submission }) {
       >
         {isPending ? 'Saving…' : state.success ? '✓ Saved' : 'Save'}
       </button>
-
-      {state.error && (
-        <p className="text-[10px] text-red-400">{state.error}</p>
-      )}
+      {state.error && <p className="text-[10px] text-red-400">{state.error}</p>}
     </form>
   );
 }
 
-// ── Main Dashboard ─────────────────────────────────────────────────────────────
 export default function AdminDashboard({ submissions }: { submissions: Submission[] }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
 
   const filtered = useMemo(() => {
-    let list = submissions;
+    let items = submissions;
     if (statusFilter !== 'all') {
-      list = list.filter((s) => s.status === statusFilter);
+      items = items.filter((s) => s.status === statusFilter);
     }
     if (search.trim()) {
       const q = search.toLowerCase();
-      list = list.filter(
+      items = items.filter(
         (s) =>
           s.name.toLowerCase().includes(q) ||
           (s.email ?? '').toLowerCase().includes(q) ||
           (s.instagram ?? '').toLowerCase().includes(q),
       );
     }
-    return list;
+    return items;
   }, [submissions, search, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-
-  // Reset to page 1 when filters change
-  const handleSearch = (v: string) => { setSearch(v); setPage(1); };
-  const handleStatus = (v: string) => { setStatusFilter(v); setPage(1); };
+  const currentPage = Math.min(page, totalPages);
+  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { total: submissions.length };
@@ -105,9 +93,13 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
     return c;
   }, [submissions]);
 
+  function handleFilterClick(s: string) {
+    setStatusFilter(s);
+    setPage(1);
+  }
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
-      {/* ── Top bar ── */}
       <header className="sticky top-0 z-10 border-b border-[#1a1a1a] bg-[#0a0a0a]/95 px-4 py-3 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
           <div>
@@ -126,39 +118,35 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8">
-        {/* ── Stats row ── */}
+        {/* ── Stats / Filter cards ── */}
         <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          <button onClick={() => handleStatus('all')} className="text-left">
-            <StatCard label="Total" value={counts.total} accent active={statusFilter === 'all'} />
-          </button>
+          <StatCard
+            label="Total"
+            value={counts.total}
+            accent
+            active={statusFilter === 'all'}
+            onClick={() => handleFilterClick('all')}
+          />
           {STATUS_OPTIONS.map((s) => (
-            <button key={s} onClick={() => handleStatus(s)} className="text-left">
-              <StatCard label={s} value={counts[s] ?? 0} active={statusFilter === s} />
-            </button>
+            <StatCard
+              key={s}
+              label={s}
+              value={counts[s] ?? 0}
+              active={statusFilter === s}
+              onClick={() => handleFilterClick(s)}
+            />
           ))}
         </div>
 
-        {/* ── Filters ── */}
-        <div className="mb-6 flex flex-wrap items-center gap-3">
+        {/* ── Search ── */}
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
           <input
             type="search"
             value={search}
-            onChange={(e) => handleSearch(e.target.value)}
-            placeholder="Search name, email, Instagram…"
-            className="w-full max-w-sm rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-2.5 text-sm text-white placeholder:text-[#555] focus:border-[#DC143C] focus:outline-none"
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Search by name, email, Instagram…"
+            className="w-full max-w-md rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-2.5 text-sm text-white placeholder:text-[#555] focus:border-[#DC143C] focus:outline-none"
           />
-          <select
-            value={statusFilter}
-            onChange={(e) => handleStatus(e.target.value)}
-            className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-2.5 text-sm text-white focus:border-[#DC143C] focus:outline-none"
-          >
-            <option value="all">All statuses</option>
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s.charAt(0).toUpperCase() + s.slice(1)} ({counts[s] ?? 0})
-              </option>
-            ))}
-          </select>
           {(search || statusFilter !== 'all') && (
             <p className="text-xs text-[#666]">
               {filtered.length} of {submissions.length} submissions
@@ -176,7 +164,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
         ) : (
           <>
             <div className="overflow-x-auto rounded-xl border border-[#1e1e1e]">
-              <table className="w-full min-w-[960px] text-sm">
+              <table className="w-full min-w-[860px] text-sm">
                 <thead>
                   <tr className="border-b border-[#1e1e1e] bg-[#111] text-left text-[10px] font-semibold uppercase tracking-wider text-[#555]">
                     <th className="px-4 py-3 w-10">#</th>
@@ -187,7 +175,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                     <th className="px-4 py-3">Video</th>
                     <th className="px-4 py-3">Headshot</th>
                     <th className="px-4 py-3">Submitted</th>
-                    <th className="px-4 py-3 w-44">Status / Notes</th>
+                    <th className="px-4 py-3 w-40">Status / Notes</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -222,17 +210,22 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                             rel="noopener noreferrer"
                             className="text-[#DC143C] hover:underline"
                           >
-                            {sub.instagram.startsWith('@') ? sub.instagram : `@${sub.instagram}`}
+                            {sub.instagram.startsWith('@')
+                              ? sub.instagram
+                              : `@${sub.instagram}`}
                           </a>
                         ) : (
                           <span className="text-[#333]">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 max-w-[180px]">
+                      <td className="px-4 py-3 max-w-[160px]">
                         {sub.availability ? (
                           <div className="flex flex-wrap gap-1">
                             {sub.availability.split(', ').map((d) => (
-                              <span key={d} className="rounded bg-[#1a1a1a] px-1.5 py-0.5 text-[10px] text-[#aaa]">
+                              <span
+                                key={d}
+                                className="rounded bg-[#1e1e1e] px-1.5 py-0.5 text-[10px] text-[#888]"
+                              >
                                 {d}
                               </span>
                             ))}
@@ -262,7 +255,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                             <img
                               src={sub.headshot_url}
                               alt={sub.name}
-                              className="h-10 w-10 rounded object-cover border border-[#2a2a2a] hover:border-[#DC143C]"
+                              className="h-10 w-10 rounded-full object-cover ring-1 ring-[#2a2a2a]"
                             />
                           </a>
                         ) : (
@@ -276,7 +269,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                           year: 'numeric',
                         })}
                       </td>
-                      <td className="px-4 py-3 w-44">
+                      <td className="px-4 py-3 w-40">
                         <div className="mb-2">
                           <span
                             className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase ${
@@ -296,22 +289,22 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
 
             {/* ── Pagination ── */}
             {totalPages > 1 && (
-              <div className="mt-4 flex items-center justify-between text-sm">
-                <p className="text-xs text-[#555]">
-                  Page {safePage} of {totalPages} — {filtered.length} submissions
-                </p>
+              <div className="mt-4 flex items-center justify-between text-xs text-[#666]">
+                <span>
+                  Page {currentPage} of {totalPages} · {filtered.length} submissions
+                </span>
                 <div className="flex gap-2">
                   <button
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={safePage === 1}
-                    className="rounded border border-[#2a2a2a] px-3 py-1 text-xs text-[#888] transition hover:border-[#DC143C] hover:text-white disabled:opacity-30"
+                    disabled={currentPage === 1}
+                    className="rounded border border-[#2a2a2a] px-3 py-1.5 transition hover:border-[#DC143C] disabled:opacity-30"
                   >
                     ← Prev
                   </button>
                   <button
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={safePage === totalPages}
-                    className="rounded border border-[#2a2a2a] px-3 py-1 text-xs text-[#888] transition hover:border-[#DC143C] hover:text-white disabled:opacity-30"
+                    disabled={currentPage === totalPages}
+                    className="rounded border border-[#2a2a2a] px-3 py-1.5 transition hover:border-[#DC143C] disabled:opacity-30"
                   >
                     Next →
                   </button>
@@ -330,18 +323,22 @@ function StatCard({
   value,
   accent,
   active,
+  onClick,
 }: {
   label: string;
   value: number;
   accent?: boolean;
   active?: boolean;
+  onClick?: () => void;
 }) {
   return (
-    <div
-      className={`rounded-xl border px-4 py-3 transition ${
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl border px-4 py-3 text-left transition ${
         active
-          ? 'border-[#DC143C]/60 bg-[#DC143C]/10'
-          : 'border-[#1e1e1e] bg-[#111] hover:border-[#DC143C]/30'
+          ? 'border-[#DC143C] bg-[#DC143C]/10'
+          : 'border-[#1e1e1e] bg-[#111] hover:border-[#DC143C]/50'
       }`}
     >
       <p className="text-[10px] font-semibold uppercase tracking-wider text-[#555]">
@@ -349,11 +346,11 @@ function StatCard({
       </p>
       <p
         className={`mt-1 text-2xl font-extrabold ${
-          accent || active ? 'text-[#DC143C]' : 'text-white'
+          accent ? 'text-[#DC143C]' : 'text-white'
         }`}
       >
         {value}
       </p>
-    </div>
+    </button>
   );
 }

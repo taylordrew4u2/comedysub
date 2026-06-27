@@ -3,8 +3,8 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { insertSubmission, updateSubmission } from './lib/db';
 import { put } from '@vercel/blob';
+import { insertSubmission, updateSubmission } from './lib/db';
 
 // ── Public Submission ──────────────────────────────────────────────────────────
 
@@ -29,7 +29,6 @@ export async function submitWebForm(
     return { error: 'Please fill in your name and video link.' };
   }
 
-  // Upload headshot to Vercel Blob if provided and configured
   let headshot_url: string | null = null;
   if (headshotFile && headshotFile.size > 0 && process.env.BLOB_READ_WRITE_TOKEN) {
     try {
@@ -42,7 +41,6 @@ export async function submitWebForm(
       headshot_url = blob.url;
     } catch (err) {
       console.error('Headshot upload failed:', err);
-      // Non-fatal — continue without headshot
     }
   }
 
@@ -50,12 +48,8 @@ export async function submitWebForm(
     const { id } = await insertSubmission({
       name,
       email,
-      location: '',
-      bio: '',
       instagram,
-      has_tattoos: false,
       availability,
-      experience: '',
       video_url,
       headshot_url,
       source: 'web',
