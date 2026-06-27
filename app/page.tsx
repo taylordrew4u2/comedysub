@@ -2,9 +2,9 @@ import type { Metadata } from 'next';
 import WebForm from './_components/WebForm';
 
 export const metadata: Metadata = {
-  title: 'Pins & Needles — Comedian Submissions',
+  title: 'Pins & Needles — Apply to Perform',
   description:
-    'Apply to perform at Pins & Needles, the stand-up comedy showcase at Edinburgh Fringe. Submit your video link here.',
+    'Stand-up comedian? Apply to perform at Pins & Needles at Edinburgh Fringe. Submit your set video now.',
 };
 
 export default function HomePage() {
@@ -14,86 +14,68 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
       {/* ── Nav ── */}
-      <header className="border-b border-[#1a1a1a] px-4 py-4">
-        <div className="mx-auto flex max-w-5xl items-center justify-between">
-          <span className="text-sm font-bold tracking-widest text-[#DC143C] uppercase">
+      <header className="px-4 py-5">
+        <div className="mx-auto flex max-w-2xl items-center justify-between">
+          <span className="text-xs font-bold tracking-widest text-[#DC143C] uppercase">
             Pins &amp; Needles
           </span>
-          <span className="text-xs text-[#555]">Edinburgh Fringe</span>
+          <span className="text-xs text-[#444]">Edinburgh Fringe</span>
         </div>
       </header>
 
-      {/* ── Hero ── */}
-      <section className="px-4 py-16 text-center sm:py-24">
-        <div className="mx-auto max-w-3xl">
-          <p className="mb-4 text-xs font-bold uppercase tracking-[0.3em] text-[#DC143C]">
-            Open Call · Edinburgh Fringe
-          </p>
-          <h1 className="mb-6 text-4xl font-extrabold leading-tight tracking-tight sm:text-6xl">
-            Pins &amp;{' '}
-            <span className="text-[#DC143C]">Needles</span>
-          </h1>
-          <p className="mb-4 text-lg font-medium text-[#ccc] sm:text-xl">
-            Stand-up comedy at Edinburgh Fringe.
-          </p>
-          <p className="mx-auto max-w-xl text-sm leading-relaxed text-[#777]">
-            We&apos;re looking for stand-up comedians ready to take the Fringe stage.
-            Stand-up only — no character acts, no sketch, no spoken word.
-            Submit your set video below and we&apos;ll be in touch if you&apos;re shortlisted.
-          </p>
-        </div>
-      </section>
+      <main className="px-4 pb-20">
+        <div className="mx-auto max-w-2xl">
 
-      {/* ── Show Details ── */}
-      <section className="px-4 pb-10">
-        <div className="mx-auto max-w-md">
-          <div className="rounded-2xl border border-[#1e1e1e] bg-[#111] p-6 text-center">
-            <p className="mb-1 text-xs font-bold uppercase tracking-widest text-[#DC143C]">
-              Show Details
+          {/* ── Primary CTA block ── */}
+          <div className="mb-10 pt-10 sm:pt-16">
+            <p className="mb-3 text-xs font-bold uppercase tracking-[0.25em] text-[#DC143C]">
+              Now Accepting Applications
             </p>
-            <p className="text-base font-bold text-white">The Raging Bull</p>
-            <p className="mt-1 text-sm text-[#888]">161 Lothian Rd, Edinburgh EH3 9AA</p>
-            <p className="mt-2 text-sm font-semibold text-[#ccc]">10:15pm · August 6–18</p>
+            <h1 className="mb-4 text-5xl font-extrabold leading-[1.05] tracking-tight sm:text-7xl">
+              Are you a<br />
+              <span className="text-[#DC143C]">stand-up?</span>
+            </h1>
+            <p className="max-w-md text-base leading-relaxed text-[#888]">
+              We&apos;re booking comedians for Pins &amp; Needles at Edinburgh Fringe.
+              Stand-up sets only. Submit your video and we&apos;ll be in touch.
+            </p>
           </div>
-        </div>
-      </section>
 
-      <div className="border-t border-[#1a1a1a]" />
-
-      {/* ── Submission Form or Closed Banner ── */}
-      <section className="px-4 py-14 sm:py-20">
-        <div className="mx-auto max-w-md">
+          {/* ── Form or Closed ── */}
           {isOpen ? (
-            <>
-              <div className="mb-8 text-center">
-                <h2 className="mb-2 text-2xl font-bold sm:text-3xl">Submit Your Set</h2>
-                <p className="text-sm text-[#777]">
-                  Stand-up comedians only. Paste your performance video link below.
+            <div className="rounded-2xl border border-[#1e1e1e] bg-[#111] p-6 sm:p-8">
+              {closingDate && (
+                <p className="mb-5 text-xs font-semibold text-[#DC143C]">
+                  ⏳ Applications close {closingDate}
                 </p>
-                {closingDate && (
-                  <p className="mt-3 text-xs font-semibold text-[#DC143C]">
-                    Applications close {closingDate}
-                  </p>
-                )}
-              </div>
-              <div className="rounded-2xl border border-[#1e1e1e] bg-[#111] p-6 sm:p-8">
-                <WebForm />
-              </div>
-            </>
+              )}
+              <WebForm />
+            </div>
           ) : (
             <div className="rounded-2xl border border-[#DC143C]/30 bg-[#DC143C]/10 p-10 text-center">
-              <p className="mb-2 text-xl font-bold text-white">Applications Closed</p>
+              <p className="mb-2 text-xl font-bold">Applications Closed</p>
               <p className="text-sm text-[#999]">
                 We&apos;re not currently accepting submissions. Check back soon.
               </p>
             </div>
           )}
-        </div>
-      </section>
 
-      {/* ── Footer ── */}
-      <footer className="border-t border-[#1a1a1a] px-4 py-8 text-center text-xs text-[#444]">
-        <p>© Pins &amp; Needles Comedy · Edinburgh Fringe</p>
+          {/* ── Show details — supporting info, below the fold ── */}
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6 border-t border-[#1a1a1a] pt-6">
+            <div className="flex items-center gap-2 text-sm text-[#555]">
+              <span className="text-[#DC143C]">📍</span>
+              <span>The Raging Bull · 161 Lothian Rd, Edinburgh EH3 9AA</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-[#555]">
+              <span className="text-[#DC143C]">🕙</span>
+              <span>10:15pm · Aug 6–18</span>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer className="border-t border-[#1a1a1a] px-4 py-6 text-center text-xs text-[#333]">
+        © Pins &amp; Needles Comedy · Edinburgh Fringe
       </footer>
     </div>
   );
