@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { insertSubmission, updateSubmission } from './lib/db';
+import { put } from '@vercel/blob';
 
 // ── Public Submission ──────────────────────────────────────────────────────────
 
@@ -18,16 +19,36 @@ export async function submitWebForm(
   formData: FormData,
 ): Promise<SubmitState> {
   const name = (formData.get('name') as string)?.trim();
+  const email = (formData.get('email') as string)?.trim() || null;
   const video_url = (formData.get('video_url') as string)?.trim() || null;
   const instagram = (formData.get('instagram') as string)?.trim() || null;
+  const headshotFile = formData.get('headshot') as File | null;
 
   if (!name || !video_url) {
     return { error: 'Please fill in your name and video link.' };
   }
 
+  // Upload headshot to Vercel Blob if provided and configured
+  let headshot_url: string | null = null;
+  if (headshotFile && headshotFile.size > 0 && process.env.BLOB_READ_WRITE_TOKEN) {
+    try {
+      const ext = headshotFile.name.split('.').pop() ?? 'jpg';
+      const blob = await put(
+        `headshots/${Date.now()}-${name.replace(/\s+/g, '-')}.${ext}`,
+        headshotFile,
+        { access: 'public' },
+      );
+      headshot_url = blob.url;
+    } catch (err) {
+      console.error('Headshot upload failed:', err);
+      // Non-fatal — continue without headshot
+    }
+  }
+
   try {
     const { id } = await insertSubmission({
       name,
+      email,
       location: '',
       bio: '',
       instagram,
@@ -35,6 +56,7 @@ export async function submitWebForm(
       availability: '',
       experience: '',
       video_url,
+      headshot_url,
       source: 'web',
     });
     return { success: true, refId: id };
@@ -45,8 +67,6 @@ export async function submitWebForm(
 }
 
 // ── Admin Auth ─────────────────────────────────────────────────────────────────
-// Simple cookie-based admin authentication — designed for personal/solo admin use.
-// No external auth service required. Password stored in ADMIN_PASSWORD env var.
 
 export interface LoginState {
   error?: string;
@@ -71,7 +91,7 @@ export async function adminLogin(
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 7, // 7 days
+    maxAge: 60 * 60 * 24 * 7,
     path: '/',
   });
 
