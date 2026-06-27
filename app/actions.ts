@@ -22,19 +22,19 @@ export async function submitWebForm(
   const email = (formData.get('email') as string)?.trim() || null;
   const video_url = (formData.get('video_url') as string)?.trim() || null;
   const instagram = (formData.get('instagram') as string)?.trim() || null;
-  const availability = (formData.getAll('availability') as string[]).join(', ') || '';
+  const headshotFile = formData.get('headshot') as File | null;
+  const availability = formData.getAll('availability').join(', ') || '';
 
   if (!name || !video_url) {
     return { error: 'Please fill in your name and video link.' };
   }
 
   let headshot_url: string | null = null;
-  const headshotFile = formData.get('headshot') as File | null;
-  if (headshotFile && headshotFile.size > 0) {
+  if (headshotFile && headshotFile.size > 0 && process.env.BLOB_READ_WRITE_TOKEN) {
     try {
       const ext = headshotFile.name.split('.').pop() ?? 'jpg';
       const blob = await put(
-        `headshots/${Date.now()}-${name.replace(/\s+/g, '-').toLowerCase()}.${ext}`,
+        `headshots/${Date.now()}-${name.replace(/\s+/g, '-')}.${ext}`,
         headshotFile,
         { access: 'public' },
       );
