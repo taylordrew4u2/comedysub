@@ -10,6 +10,11 @@ const inputClass =
 const labelClass =
   'block mb-1 text-xs font-semibold uppercase tracking-wider text-[#888]';
 
+const AUG_DATES = Array.from({ length: 13 }, (_, i) => {
+  const d = i + 6;
+  return { value: `Aug ${d}`, label: `${d}` };
+});
+
 export default function WebForm() {
   const [state, formAction, isPending] = useActionState(submitWebForm, initial);
 
@@ -23,14 +28,15 @@ export default function WebForm() {
           We&apos;ll be in touch if you&apos;re shortlisted.
         </p>
         <p className="mt-4 text-sm text-[#666]">
-          Reference ID: <span className="font-mono font-bold text-[#DC143C]">#{state.refId}</span>
+          Reference ID:{' '}
+          <span className="font-mono font-bold text-[#DC143C]">#{state.refId}</span>
         </p>
       </div>
     );
   }
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} className="space-y-5" encType="multipart/form-data">
       {state.error && (
         <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-400">
           {state.error}
@@ -39,12 +45,20 @@ export default function WebForm() {
 
       <div>
         <label className={labelClass}>Your Name *</label>
+        <input name="name" required className={inputClass} placeholder="Jane Doe" />
+      </div>
+
+      <div>
+        <label className={labelClass}>Email</label>
         <input
-          name="name"
-          required
+          name="email"
+          type="email"
           className={inputClass}
-          placeholder="Jane Doe"
+          placeholder="jane@example.com"
         />
+        <p className="mt-1 text-[11px] text-[#555]">
+          Optional — we&apos;ll use this to contact you if you&apos;re shortlisted.
+        </p>
       </div>
 
       <div>
@@ -57,17 +71,47 @@ export default function WebForm() {
           placeholder="YouTube, Vimeo, Google Drive, Dropbox — any shareable link"
         />
         <p className="mt-1 text-[11px] text-[#555]">
-          Paste a link to your performance video. Unlisted YouTube links work great.
+          Paste a link to your stand-up set. Unlisted YouTube links work great.
         </p>
       </div>
 
       <div>
         <label className={labelClass}>Instagram Handle</label>
+        <input name="instagram" className={inputClass} placeholder="@yourhandle" />
+      </div>
+
+      <div>
+        <label className={labelClass}>Availability — August 2025</label>
+        <p className="mb-2 text-[11px] text-[#555]">Select all dates you&apos;re free (Aug 6–18)</p>
+        <div className="grid grid-cols-7 gap-1.5">
+          {AUG_DATES.map(({ value, label }) => (
+            <label
+              key={value}
+              className="relative flex cursor-pointer flex-col items-center"
+            >
+              <input
+                type="checkbox"
+                name="availability"
+                value={value}
+                className="peer sr-only"
+              />
+              <span className="flex h-9 w-full items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] text-xs font-semibold text-[#888] transition peer-checked:border-[#DC143C] peer-checked:bg-[#DC143C]/20 peer-checked:text-white">
+                {label}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className={labelClass}>Headshot</label>
         <input
-          name="instagram"
-          className={inputClass}
-          placeholder="@yourhandle"
+          name="headshot"
+          type="file"
+          accept="image/*"
+          className="w-full rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-2 text-sm text-[#888] file:mr-3 file:rounded file:border-0 file:bg-[#DC143C] file:px-3 file:py-1 file:text-xs file:font-semibold file:text-white focus:outline-none"
         />
+        <p className="mt-1 text-[11px] text-[#555]">Optional — a recent photo of you.</p>
       </div>
 
       <button
@@ -79,7 +123,7 @@ export default function WebForm() {
       </button>
 
       <p className="text-center text-[11px] text-[#555]">
-        We watch every submission. We&apos;ll reach out if you&apos;re shortlisted.
+        We watch every submission. Stand-up sets only.
       </p>
     </form>
   );
