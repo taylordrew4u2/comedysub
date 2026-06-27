@@ -85,6 +85,33 @@ export default function WebForm() {
       </div>
 
       <div>
+        <label className={labelClass}>
+          Availability — August 2026 <span className="normal-case text-[#555]">(select all that apply)</span>
+        </label>
+        <div className="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-7">
+          {Array.from({ length: 13 }, (_, i) => {
+            const day = i + 6;
+            const label = `Aug ${day}`;
+            return (
+              <label
+                key={day}
+                className="flex cursor-pointer flex-col items-center gap-1 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-2 py-2 text-xs transition has-[:checked]:border-[#DC143C] has-[:checked]:bg-[#DC143C]/10 has-[:checked]:text-[#DC143C]"
+              >
+                <input
+                  type="checkbox"
+                  name="availability"
+                  value={label}
+                  className="sr-only"
+                />
+                <span className="font-semibold">{day}</span>
+                <span className="text-[10px] text-[#555]">Aug</span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      <div>
         <label className={labelClass}>Headshot <span className="normal-case text-[#555]">(optional)</span></label>
         {preview && (
           <div className="mb-2">
