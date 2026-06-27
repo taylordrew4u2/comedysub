@@ -39,9 +39,9 @@ export default function HomePage() {
             The tattoo-fuelled comedy showcase at Edinburgh Fringe.
           </p>
           <p className="mx-auto max-w-xl text-sm leading-relaxed text-[#777]">
-            We&apos;re looking for bold, inked-up comedians ready to take the Fringe stage.
-            All experience levels welcome — stand-up, storytelling, character, spoken word.
-            Submit your video below and we&apos;ll be in touch.
+            We&apos;re looking for stand-up comedians ready to take the Fringe stage.
+            Stand-up only — all experience levels welcome.
+            Submit your set video below and we&apos;ll be in touch.
           </p>
         </div>
       </section>
@@ -55,7 +55,7 @@ export default function HomePage() {
           <div className="mb-8 text-center">
             <h2 className="mb-2 text-2xl font-bold sm:text-3xl">Submit Your Video</h2>
             <p className="text-sm text-[#777]">
-              Comedians only. Paste your performance video link below.
+              Stand-up comedians only. Paste a link to your set below.
             </p>
             {closingDate && isOpen && (
               <p className="mt-3 text-xs font-semibold text-[#DC143C] uppercase tracking-wider">

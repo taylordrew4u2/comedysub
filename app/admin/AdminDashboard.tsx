@@ -183,6 +183,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                     <th className="px-4 py-3">Name</th>
                     <th className="px-4 py-3">Email</th>
                     <th className="px-4 py-3">Instagram</th>
+                    <th className="px-4 py-3">Availability</th>
                     <th className="px-4 py-3">Video</th>
                     <th className="px-4 py-3">Headshot</th>
                     <th className="px-4 py-3">Submitted</th>
@@ -225,6 +226,19 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                           </a>
                         ) : (
                           <span className="text-[#333]">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 max-w-[180px]">
+                        {sub.availability ? (
+                          <div className="flex flex-wrap gap-1">
+                            {sub.availability.split(', ').map((d) => (
+                              <span key={d} className="rounded bg-[#1a1a1a] px-1.5 py-0.5 text-[10px] text-[#aaa]">
+                                {d}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-[#333] text-xs">—</span>
                         )}
                       </td>
                       <td className="px-4 py-3">

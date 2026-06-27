@@ -23,6 +23,7 @@ export async function submitWebForm(
   const video_url = (formData.get('video_url') as string)?.trim() || null;
   const instagram = (formData.get('instagram') as string)?.trim() || null;
   const headshotFile = formData.get('headshot') as File | null;
+  const availability = formData.getAll('availability').join(', ') || '';
 
   if (!name || !video_url) {
     return { error: 'Please fill in your name and video link.' };
@@ -53,7 +54,7 @@ export async function submitWebForm(
       bio: '',
       instagram,
       has_tattoos: false,
-      availability: '',
+      availability,
       experience: '',
       video_url,
       headshot_url,
