@@ -11,6 +11,11 @@ const labelClass = 'block mb-1.5 text-xs font-semibold text-[#666] uppercase tra
 
 const AUG_DATES = Array.from({ length: 13 }, (_, i) => i + 6);
 
+const AUG_DATES = Array.from({ length: 13 }, (_, i) => {
+  const d = i + 6;
+  return { value: `Aug ${d}`, label: `${d}` };
+});
+
 export default function WebForm() {
   const [state, formAction, isPending] = useActionState(submitWebForm, initial);
 
