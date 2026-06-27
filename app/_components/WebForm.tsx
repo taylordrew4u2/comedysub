@@ -20,7 +20,7 @@ export default function WebForm() {
         <h3 className="mb-2 text-xl font-bold text-white">Submission received!</h3>
         <p className="text-[#aaa]">
           Thanks for applying to Pins &amp; Needles Edinburgh Fringe.
-          We'll be in touch if you're shortlisted.
+          We&apos;ll be in touch if you&apos;re shortlisted.
         </p>
         <p className="mt-4 text-sm text-[#666]">
           Reference ID: <span className="font-mono font-bold text-[#DC143C]">#{state.refId}</span>
@@ -37,85 +37,36 @@ export default function WebForm() {
         </div>
       )}
 
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div>
-          <label className={labelClass}>Full Name *</label>
-          <input
-            name="name"
-            required
-            className={inputClass}
-            placeholder="Jane Doe"
-          />
-        </div>
-        <div>
-          <label className={labelClass}>City, Country *</label>
-          <input
-            name="location"
-            required
-            className={inputClass}
-            placeholder="London, UK"
-          />
-        </div>
-      </div>
-
-      <div className="grid gap-5 sm:grid-cols-2">
-        <div>
-          <label className={labelClass}>Instagram Handle</label>
-          <input
-            name="instagram"
-            className={inputClass}
-            placeholder="@yourhandle"
-          />
-        </div>
-        <div>
-          <label className={labelClass}>Do you have tattoos? *</label>
-          <select name="has_tattoos" required className={inputClass} defaultValue="yes">
-            <option value="yes">Yes</option>
-            <option value="no">No</option>
-          </select>
-        </div>
-      </div>
-
       <div>
-        <label className={labelClass}>Availability at Edinburgh Fringe *</label>
+        <label className={labelClass}>Your Name *</label>
         <input
-          name="availability"
+          name="name"
           required
           className={inputClass}
-          placeholder="e.g. 5–25 August, all dates / specific dates"
+          placeholder="Jane Doe"
         />
       </div>
 
       <div>
-        <label className={labelClass}>Comedy Experience *</label>
-        <input
-          name="experience"
-          required
-          className={inputClass}
-          placeholder="e.g. 3 years, open mics + festival support slots"
-        />
-      </div>
-
-      <div>
-        <label className={labelClass}>Video Link</label>
+        <label className={labelClass}>Submission Video Link *</label>
         <input
           name="video_url"
           type="url"
+          required
           className={inputClass}
           placeholder="YouTube, Vimeo, Google Drive, Dropbox — any shareable link"
         />
         <p className="mt-1 text-[11px] text-[#555]">
-          Unlisted YouTube or any shareable link. No file upload needed.
+          Paste a link to your performance video. Unlisted YouTube links work great.
         </p>
       </div>
 
       <div>
-        <label className={labelClass}>Short Bio *</label>
-        <textarea
-          name="bio"
-          required
-          className={`${inputClass} min-h-[110px] resize-y`}
-          placeholder="Tell us who you are, your comedy style, and why Pins & Needles…"
+        <label className={labelClass}>Instagram Handle</label>
+        <input
+          name="instagram"
+          className={inputClass}
+          placeholder="@yourhandle"
         />
       </div>
 
@@ -124,11 +75,11 @@ export default function WebForm() {
         disabled={isPending}
         className="w-full rounded-xl bg-[#DC143C] py-3 text-base font-bold text-white transition hover:bg-[#b01030] disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isPending ? 'Submitting…' : 'Submit Application'}
+        {isPending ? 'Submitting…' : 'Submit'}
       </button>
 
       <p className="text-center text-[11px] text-[#555]">
-        We read every submission. Response times vary — thanks for your patience.
+        We watch every submission. We&apos;ll reach out if you&apos;re shortlisted.
       </p>
     </form>
   );

@@ -18,27 +18,22 @@ export async function submitWebForm(
   formData: FormData,
 ): Promise<SubmitState> {
   const name = (formData.get('name') as string)?.trim();
-  const location = (formData.get('location') as string)?.trim();
-  const bio = (formData.get('bio') as string)?.trim();
-  const instagram = (formData.get('instagram') as string)?.trim() || null;
-  const has_tattoos = formData.get('has_tattoos') === 'yes';
-  const availability = (formData.get('availability') as string)?.trim();
-  const experience = (formData.get('experience') as string)?.trim();
   const video_url = (formData.get('video_url') as string)?.trim() || null;
+  const instagram = (formData.get('instagram') as string)?.trim() || null;
 
-  if (!name || !location || !bio || !availability || !experience) {
-    return { error: 'Please fill in all required fields.' };
+  if (!name || !video_url) {
+    return { error: 'Please fill in your name and video link.' };
   }
 
   try {
     const { id } = await insertSubmission({
       name,
-      location,
-      bio,
+      location: '',
+      bio: '',
       instagram,
-      has_tattoos,
-      availability,
-      experience,
+      has_tattoos: false,
+      availability: '',
+      experience: '',
       video_url,
       source: 'web',
     });
