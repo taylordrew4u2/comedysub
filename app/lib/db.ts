@@ -1,4 +1,4 @@
-import { sql } from '@vercel/postgres';
+import { getPrisma } from './prisma';
 
 export type SubmissionStatus =
   | 'new'
@@ -25,31 +25,6 @@ export interface Submission {
   submitted_at: string;
 }
 
-export async function ensureTable(): Promise<void> {
-  await sql`
-    CREATE TABLE IF NOT EXISTS submissions (
-      id            SERIAL PRIMARY KEY,
-      name          TEXT        NOT NULL,
-      email         TEXT,
-      location      TEXT        NOT NULL DEFAULT '',
-      bio           TEXT        NOT NULL DEFAULT '',
-      instagram     TEXT,
-      has_tattoos   BOOLEAN     NOT NULL DEFAULT FALSE,
-      availability  TEXT        NOT NULL DEFAULT '',
-      experience    TEXT        NOT NULL DEFAULT '',
-      video_url     TEXT,
-      headshot_url  TEXT,
-      source        TEXT        NOT NULL DEFAULT 'web',
-      status        TEXT        NOT NULL DEFAULT 'new',
-      admin_notes   TEXT,
-      submitted_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `;
-  // Add new columns to existing tables that predate them
-  await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS email TEXT`;
-  await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS headshot_url TEXT`;
-}
-
 export async function insertSubmission(data: {
   name: string;
   email: string | null;
@@ -63,55 +38,43 @@ export async function insertSubmission(data: {
   headshot_url: string | null;
   source: 'web';
 }): Promise<{ id: number }> {
-  await ensureTable();
-  const { rows } = await sql`
-    INSERT INTO submissions
-      (name, email, location, bio, instagram, has_tattoos, availability, experience, video_url, headshot_url, source)
-    VALUES
-      (${data.name}, ${data.email}, ${data.location}, ${data.bio}, ${data.instagram},
-       ${data.has_tattoos}, ${data.availability}, ${data.experience},
-       ${data.video_url}, ${data.headshot_url}, ${data.source})
-    RETURNING id
-  `;
-  return rows[0] as { id: number };
+  const row = await getPrisma().submission.create({ data });
+  return { id: row.id };
 }
 
 export async function getSubmissions(
   search?: string,
   statusFilter?: string,
 ): Promise<Submission[]> {
-  await ensureTable();
-
-  if (search && search.trim()) {
-    const q = `%${search.trim()}%`;
-    if (statusFilter && statusFilter !== 'all') {
-      const { rows } = await sql`
-        SELECT * FROM submissions
-        WHERE status = ${statusFilter}
-          AND (name ILIKE ${q} OR email ILIKE ${q} OR instagram ILIKE ${q})
-        ORDER BY submitted_at DESC
-      `;
-      return rows as Submission[];
-    }
-    const { rows } = await sql`
-      SELECT * FROM submissions
-      WHERE name ILIKE ${q} OR email ILIKE ${q} OR instagram ILIKE ${q}
-      ORDER BY submitted_at DESC
-    `;
-    return rows as Submission[];
-  }
+  const where: Record<string, unknown> = {};
 
   if (statusFilter && statusFilter !== 'all') {
-    const { rows } = await sql`
-      SELECT * FROM submissions WHERE status = ${statusFilter} ORDER BY submitted_at DESC
-    `;
-    return rows as Submission[];
+    where.status = statusFilter;
   }
 
-  const { rows } = await sql`
-    SELECT * FROM submissions ORDER BY submitted_at DESC
-  `;
-  return rows as Submission[];
+  if (search && search.trim()) {
+    const q = search.trim();
+    where.OR = [
+      { name: { contains: q, mode: 'insensitive' } },
+      { email: { contains: q, mode: 'insensitive' } },
+      { instagram: { contains: q, mode: 'insensitive' } },
+    ];
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows: any[] = await getPrisma().submission.findMany({
+    where,
+    orderBy: { submitted_at: 'desc' },
+  });
+
+  return rows.map((r) => ({
+    ...r,
+    source: 'web' as const,
+    status: r.status as SubmissionStatus,
+    submitted_at: r.submitted_at instanceof Date
+      ? r.submitted_at.toISOString()
+      : String(r.submitted_at),
+  }));
 }
 
 export async function updateSubmission(
@@ -119,9 +82,8 @@ export async function updateSubmission(
   status: string,
   admin_notes: string,
 ): Promise<void> {
-  await sql`
-    UPDATE submissions
-    SET    status = ${status}, admin_notes = ${admin_notes}
-    WHERE  id = ${id}
-  `;
+  await getPrisma().submission.update({
+    where: { id },
+    data: { status, admin_notes },
+  });
 }

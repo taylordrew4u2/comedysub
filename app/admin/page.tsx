@@ -22,7 +22,7 @@ export default async function AdminPage() {
   } catch (err) {
     console.error('Failed to load submissions:', err);
     dbError =
-      'Could not connect to the database. Make sure POSTGRES_URL (and related) environment variables are configured in Vercel.';
+      'Could not connect to the database. Make sure DATABASE_URL is configured in Vercel.';
   }
 
   if (dbError) {

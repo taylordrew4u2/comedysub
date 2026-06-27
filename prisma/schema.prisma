@@ -1,0 +1,28 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Submission {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String?
+  location     String   @default("")
+  bio          String   @default("")
+  instagram    String?
+  has_tattoos  Boolean  @default(false)
+  availability String   @default("")
+  experience   String   @default("")
+  video_url    String?
+  headshot_url String?
+  source       String   @default("web")
+  status       String   @default("new")
+  admin_notes  String?
+  submitted_at DateTime @default(now())
+
+  @@map("submissions")
+}
