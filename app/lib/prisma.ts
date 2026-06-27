@@ -1,7 +1,5 @@
-// PrismaClient is instantiated lazily so Next.js build-time page evaluation
-// doesn't crash when the generated client isn't available (e.g. CI/sandbox).
-// On Vercel, `prisma generate` runs during `npm install` (postinstall), so
-// the client is always available by the time requests arrive.
+// Prisma Postgres uses Prisma Accelerate — no local query engine binary needed.
+// The client is lazy-loaded so Next.js build-time evaluation doesn't fail.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const globalForPrisma = globalThis as unknown as { prisma?: any };
@@ -9,10 +7,12 @@ const globalForPrisma = globalThis as unknown as { prisma?: any };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function getPrisma(): any {
   if (!globalForPrisma.prisma) {
-    // Dynamic require avoids the import being evaluated at module load time
+    // Dynamic requires prevent evaluation at module load time (build safety)
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { PrismaClient } = require('@prisma/client');
-    globalForPrisma.prisma = new PrismaClient();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { withAccelerate } = require('@prisma/extension-accelerate');
+    globalForPrisma.prisma = new PrismaClient().$extends(withAccelerate());
   }
   return globalForPrisma.prisma;
 }
