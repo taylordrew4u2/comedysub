@@ -46,6 +46,31 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ── Show Details ── */}
+      <section className="px-4 pb-14 sm:pb-20">
+        <div className="mx-auto max-w-lg">
+          <div className="rounded-2xl border border-[#1e1e1e] bg-[#111] px-6 py-6 sm:px-8">
+            <p className="mb-4 text-[10px] font-bold uppercase tracking-widest text-[#DC143C]">Show Details</p>
+            <div className="space-y-3 text-sm">
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 text-[#DC143C]">📍</span>
+                <div>
+                  <p className="font-semibold text-white">The Raging Bull</p>
+                  <p className="text-[#777]">161 Lothian Rd, Edinburgh EH3 9AA</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <span className="mt-0.5 text-[#DC143C]">🕙</span>
+                <div>
+                  <p className="font-semibold text-white">10:15pm</p>
+                  <p className="text-[#777]">August 6–18, Edinburgh Fringe</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ── Divider ── */}
       <div className="border-t border-[#1a1a1a]" />
 
