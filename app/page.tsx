@@ -73,11 +73,11 @@ export default function HomePage() {
           {/* ── Show details — supporting info, below the fold ── */}
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6 border-t border-[#1a1a1a] pt-6">
             <div className="flex items-center gap-2 text-sm text-[#555]">
-              <span className="text-[#DC143C]">📍</span>
+              <span className="text-[#DC143C]" aria-hidden="true">📍</span>
               <span>The Raging Bull · 161 Lothian Rd, Edinburgh EH3 9AA</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-[#555]">
-              <span className="text-[#DC143C]">🕙</span>
+              <span className="text-[#DC143C]" aria-hidden="true">🕙</span>
               <span>10:15pm · Aug 6–18</span>
             </div>
           </div>

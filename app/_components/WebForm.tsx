@@ -36,18 +36,19 @@ export default function WebForm() {
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className={labelClass}>Name *</label>
-          <input name="name" required className={inputClass} placeholder="Jane Doe" />
+          <label htmlFor="name" className={labelClass}>Name *</label>
+          <input id="name" name="name" required className={inputClass} placeholder="Jane Doe" />
         </div>
         <div>
-          <label className={labelClass}>Email</label>
-          <input name="email" type="email" className={inputClass} placeholder="jane@example.com" />
+          <label htmlFor="email" className={labelClass}>Email</label>
+          <input id="email" name="email" type="email" className={inputClass} placeholder="jane@example.com" />
         </div>
       </div>
 
       <div>
-        <label className={labelClass}>Video Link *</label>
+        <label htmlFor="video_url" className={labelClass}>Video Link *</label>
         <input
+          id="video_url"
           name="video_url"
           type="url"
           required
@@ -57,13 +58,13 @@ export default function WebForm() {
       </div>
 
       <div>
-        <label className={labelClass}>Instagram</label>
-        <input name="instagram" className={inputClass} placeholder="@yourhandle" />
+        <label htmlFor="instagram" className={labelClass}>Instagram</label>
+        <input id="instagram" name="instagram" className={inputClass} placeholder="@yourhandle" />
       </div>
 
       <div>
         <label className={labelClass}>Available dates — August</label>
-        <div className="mt-2 grid grid-cols-7 gap-1.5">
+        <div className="mt-2 grid grid-cols-7 gap-1.5" role="group" aria-label="Available dates in August">
           {AUG_DATES.map((d) => (
             <label key={d} className="cursor-pointer">
               <input
@@ -81,8 +82,11 @@ export default function WebForm() {
       </div>
 
       <div>
-        <label className={labelClass}>Headshot <span className="normal-case font-normal text-[#444]">(optional)</span></label>
+        <label htmlFor="headshot" className={labelClass}>
+          Headshot <span className="normal-case font-normal text-[#444]">(optional)</span>
+        </label>
         <input
+          id="headshot"
           name="headshot"
           type="file"
           accept="image/*"
