@@ -174,14 +174,8 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                     </td>
                     <td className="px-4 py-3 text-[#aaa] whitespace-nowrap">{sub.location}</td>
                     <td className="px-4 py-3">
-                      <span
-                        className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase ${
-                          sub.source === 'line'
-                            ? 'bg-[#06C755]/20 text-[#06C755]'
-                            : 'bg-[#DC143C]/20 text-[#DC143C]'
-                        }`}
-                      >
-                        {sub.source}
+                      <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase bg-[#DC143C]/20 text-[#DC143C]">
+                        web
                       </span>
                     </td>
                     <td className="px-4 py-3 text-center text-sm">

@@ -17,7 +17,7 @@ export interface Submission {
   availability: string;
   experience: string;
   video_url: string | null;
-  source: 'web' | 'line';
+  source: 'web';
   status: SubmissionStatus;
   admin_notes: string | null;
   submitted_at: string;
@@ -56,7 +56,7 @@ export async function insertSubmission(data: {
   availability: string;
   experience: string;
   video_url: string | null;
-  source: 'web' | 'line';
+  source: 'web';
 }): Promise<{ id: number }> {
   await ensureTable();
   const { rows } = await sql`
