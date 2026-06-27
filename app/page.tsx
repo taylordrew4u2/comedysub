@@ -4,7 +4,7 @@ import WebForm from './_components/WebForm';
 export const metadata: Metadata = {
   title: 'Pins & Needles — Apply to Perform',
   description:
-    'Stand-up comedian? Apply to perform at Pins & Needles at Edinburgh Fringe. Submit your set video now.',
+    'Scottish stand-up comedian? Apply to perform at Pins & Needles at Edinburgh Fringe. Submit your set video now.',
 };
 
 export default function HomePage() {
@@ -29,16 +29,26 @@ export default function HomePage() {
           {/* ── Primary CTA block ── */}
           <div className="mb-10 pt-10 sm:pt-16">
             <p className="mb-3 text-xs font-bold uppercase tracking-[0.25em] text-[#DC143C]">
-              Now Accepting Applications
+              Open Call · Scotland
             </p>
             <h1 className="mb-4 text-5xl font-extrabold leading-[1.05] tracking-tight sm:text-7xl">
-              Are you a<br />
-              <span className="text-[#DC143C]">stand-up?</span>
+              Scottish<br />
+              <span className="text-[#DC143C]">stand-ups</span><br />
+              — apply here.
             </h1>
             <p className="max-w-md text-base leading-relaxed text-[#888]">
-              We&apos;re booking comedians for Pins &amp; Needles at Edinburgh Fringe.
-              Stand-up sets only. Submit your video and we&apos;ll be in touch.
+              We&apos;re booking Scottish stand-up comedians for Pins &amp; Needles —
+              a late-night show at The Raging Bull, Edinburgh Fringe.
+              Submit your set video and we&apos;ll be in touch if you&apos;re selected.
             </p>
+            <a
+              href="https://pinsandneedlescomedy.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 inline-flex items-center gap-1.5 text-xs text-[#555] underline underline-offset-4 hover:text-[#DC143C] transition-colors"
+            >
+              Learn more about the show ↗
+            </a>
           </div>
 
           {/* ── Form or Closed ── */}
