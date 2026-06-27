@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { submitWebForm, type SubmitState } from '../actions';
 
 const initial: SubmitState = {};
@@ -12,6 +12,7 @@ const labelClass =
 
 export default function WebForm() {
   const [state, formAction, isPending] = useActionState(submitWebForm, initial);
+  const [preview, setPreview] = useState<string | null>(null);
 
   if (state.success) {
     return (
@@ -30,7 +31,7 @@ export default function WebForm() {
   }
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form action={formAction} className="space-y-5" encType="multipart/form-data">
       {state.error && (
         <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-400">
           {state.error}
@@ -45,6 +46,19 @@ export default function WebForm() {
           className={inputClass}
           placeholder="Jane Doe"
         />
+      </div>
+
+      <div>
+        <label className={labelClass}>Email Address</label>
+        <input
+          name="email"
+          type="email"
+          className={inputClass}
+          placeholder="jane@example.com"
+        />
+        <p className="mt-1 text-[11px] text-[#555]">
+          So we can contact you directly if shortlisted.
+        </p>
       </div>
 
       <div>
@@ -68,6 +82,34 @@ export default function WebForm() {
           className={inputClass}
           placeholder="@yourhandle"
         />
+      </div>
+
+      <div>
+        <label className={labelClass}>Headshot <span className="normal-case text-[#555]">(optional)</span></label>
+        {preview && (
+          <div className="mb-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={preview}
+              alt="Headshot preview"
+              className="h-24 w-24 rounded-lg object-cover border border-[#2a2a2a]"
+            />
+          </div>
+        )}
+        <input
+          name="headshot"
+          type="file"
+          accept="image/*"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) setPreview(URL.createObjectURL(file));
+            else setPreview(null);
+          }}
+          className="w-full text-sm text-[#888] file:mr-3 file:rounded file:border-0 file:bg-[#1a1a1a] file:px-3 file:py-1.5 file:text-xs file:text-white file:cursor-pointer hover:file:bg-[#2a2a2a]"
+        />
+        <p className="mt-1 text-[11px] text-[#555]">
+          JPG, PNG, or WebP. Max 4 MB.
+        </p>
       </div>
 
       <button

@@ -36,15 +36,20 @@ Push this repo to GitHub (public or private).
 3. Name it anything (e.g. `comedysub-db`) → **Create & Continue** → connect to your project
 4. Vercel automatically injects the required `POSTGRES_*` env vars
 
-### Step 4 — Add ADMIN_PASSWORD
-1. Vercel project → **Settings** → **Environment Variables**
-2. Add: `ADMIN_PASSWORD` = your chosen password
-3. Apply to Production, Preview, and Development
+### Step 4 — Add environment variables
+In Vercel project → **Settings** → **Environment Variables**, add these (all environments):
+
+| Variable | Required | Description |
+|---|---|---|
+| `ADMIN_PASSWORD` | Yes | Password for the `/admin` dashboard |
+| `BLOB_READ_WRITE_TOKEN` | Optional | Enables headshot uploads. Get from Vercel Storage → Blob. |
+| `APPLICATIONS_OPEN` | Optional | Set to `false` to show an "Applications Closed" message on the public page. |
+| `CLOSING_DATE` | Optional | Display a deadline notice, e.g. `31 July 2026`. |
 
 ### Step 5 — Redeploy
 Go to **Deployments** → latest deployment → **Redeploy**. Done.
 
-The `submissions` table is created automatically on the first request (`CREATE TABLE IF NOT EXISTS`).
+The `submissions` table is created automatically on the first request, and new columns are added with `ALTER TABLE … ADD COLUMN IF NOT EXISTS`.
 
 ---
 

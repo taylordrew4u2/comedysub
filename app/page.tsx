@@ -8,6 +8,11 @@ export const metadata: Metadata = {
 };
 
 export default function HomePage() {
+  // Set APPLICATIONS_OPEN=false in Vercel env vars to close submissions
+  const isOpen = process.env.APPLICATIONS_OPEN !== 'false';
+  // Set CLOSING_DATE to e.g. "31 July 2026" to show a deadline notice
+  const closingDate = process.env.CLOSING_DATE ?? null;
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white">
       {/* ── Nav ── */}
@@ -52,10 +57,27 @@ export default function HomePage() {
             <p className="text-sm text-[#777]">
               Comedians only. Paste your performance video link below.
             </p>
+            {closingDate && isOpen && (
+              <p className="mt-3 text-xs font-semibold text-[#DC143C] uppercase tracking-wider">
+                Submissions close {closingDate}
+              </p>
+            )}
           </div>
-          <div className="rounded-2xl border border-[#1e1e1e] bg-[#111] p-6 sm:p-8">
-            <WebForm />
-          </div>
+
+          {isOpen ? (
+            <div className="rounded-2xl border border-[#1e1e1e] bg-[#111] p-6 sm:p-8">
+              <WebForm />
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-[#1e1e1e] bg-[#111] p-10 text-center">
+              <p className="text-2xl mb-3">🔒</p>
+              <h3 className="text-lg font-bold text-white mb-2">Applications Closed</h3>
+              <p className="text-sm text-[#777]">
+                We&apos;re not accepting submissions right now.
+                Check back later or follow us on Instagram for updates.
+              </p>
+            </div>
+          )}
         </div>
       </section>
 
