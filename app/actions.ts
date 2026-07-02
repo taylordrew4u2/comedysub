@@ -22,6 +22,7 @@ export async function submitWebForm(
   const email = (formData.get('email') as string)?.trim() || null;
   const video_url = (formData.get('video_url') as string)?.trim() || null;
   const instagram = (formData.get('instagram') as string)?.trim() || null;
+  const location = (formData.get('location') as string)?.trim() || null;
   const headshotFile = formData.get('headshot') as File | null;
   const availability = formData.getAll('availability').join(', ') || '';
 
@@ -49,6 +50,7 @@ export async function submitWebForm(
       name,
       email,
       instagram,
+      location,
       availability,
       video_url,
       headshot_url,

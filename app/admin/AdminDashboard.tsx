@@ -75,7 +75,8 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
         (s) =>
           s.name.toLowerCase().includes(q) ||
           (s.email ?? '').toLowerCase().includes(q) ||
-          (s.instagram ?? '').toLowerCase().includes(q),
+          (s.instagram ?? '').toLowerCase().includes(q) ||
+          (s.location ?? '').toLowerCase().includes(q),
       );
     }
     return items;
@@ -144,7 +145,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
             type="search"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search by name, email, Instagram…"
+            placeholder="Search by name, email, Instagram, location…"
             className="w-full max-w-md rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-2.5 text-sm text-white placeholder:text-[#555] focus:border-[#DC143C] focus:outline-none"
           />
           {(search || statusFilter !== 'all') && (
@@ -171,6 +172,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                     <th className="px-4 py-3">Name</th>
                     <th className="px-4 py-3">Email</th>
                     <th className="px-4 py-3">Instagram</th>
+                    <th className="px-4 py-3">Location</th>
                     <th className="px-4 py-3">Availability</th>
                     <th className="px-4 py-3">Video</th>
                     <th className="px-4 py-3">Headshot</th>
@@ -217,6 +219,9 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                         ) : (
                           <span className="text-[#333]">—</span>
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-[#aaa] text-xs whitespace-nowrap">
+                        {sub.location ?? <span className="text-[#333]">—</span>}
                       </td>
                       <td className="px-4 py-3 max-w-[160px]">
                         {sub.availability ? (

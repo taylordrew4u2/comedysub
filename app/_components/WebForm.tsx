@@ -57,9 +57,15 @@ export default function WebForm() {
         />
       </div>
 
-      <div>
-        <label htmlFor="instagram" className={labelClass}>Instagram</label>
-        <input id="instagram" name="instagram" className={inputClass} placeholder="@yourhandle" />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="instagram" className={labelClass}>Instagram</label>
+          <input id="instagram" name="instagram" className={inputClass} placeholder="@yourhandle" />
+        </div>
+        <div>
+          <label htmlFor="location" className={labelClass}>Where are you located?</label>
+          <input id="location" name="location" className={inputClass} placeholder="City, State" />
+        </div>
       </div>
 
       <div>
