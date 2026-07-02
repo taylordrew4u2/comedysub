@@ -165,7 +165,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
         ) : (
           <>
             <div className="overflow-x-auto rounded-xl border border-[#1e1e1e]">
-              <table className="w-full min-w-[860px] text-sm">
+              <table className="w-full min-w-[980px] text-sm">
                 <thead>
                   <tr className="border-b border-[#1e1e1e] bg-[#111] text-left text-[10px] font-semibold uppercase tracking-wider text-[#555]">
                     <th className="px-4 py-3 w-10">#</th>
@@ -220,8 +220,14 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                           <span className="text-[#333]">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-[#aaa] text-xs whitespace-nowrap">
-                        {sub.location ?? <span className="text-[#333]">—</span>}
+                      <td className="px-4 py-3 text-[#aaa] text-xs">
+                        {sub.location ? (
+                          <span className="block max-w-[140px] truncate" title={sub.location}>
+                            {sub.location}
+                          </span>
+                        ) : (
+                          <span className="text-[#333]">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 max-w-[160px]">
                         {sub.availability ? (

@@ -37,11 +37,11 @@ export default function WebForm() {
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label htmlFor="name" className={labelClass}>Name *</label>
-          <input id="name" name="name" required className={inputClass} placeholder="Jane Doe" />
+          <input id="name" name="name" required autoComplete="name" className={inputClass} placeholder="Jane Doe" />
         </div>
         <div>
           <label htmlFor="email" className={labelClass}>Email</label>
-          <input id="email" name="email" type="email" className={inputClass} placeholder="jane@example.com" />
+          <input id="email" name="email" type="email" autoComplete="email" className={inputClass} placeholder="jane@example.com" />
         </div>
       </div>
 
@@ -64,7 +64,14 @@ export default function WebForm() {
         </div>
         <div>
           <label htmlFor="location" className={labelClass}>Where are you located?</label>
-          <input id="location" name="location" className={inputClass} placeholder="City, State" />
+          <input
+            id="location"
+            name="location"
+            autoComplete="address-level2"
+            maxLength={100}
+            className={inputClass}
+            placeholder="e.g. Glasgow"
+          />
         </div>
       </div>
 
