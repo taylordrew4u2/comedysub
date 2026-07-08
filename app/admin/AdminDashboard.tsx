@@ -75,7 +75,8 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
         (s) =>
           s.name.toLowerCase().includes(q) ||
           (s.email ?? '').toLowerCase().includes(q) ||
-          (s.instagram ?? '').toLowerCase().includes(q),
+          (s.instagram ?? '').toLowerCase().includes(q) ||
+          (s.location ?? '').toLowerCase().includes(q),
       );
     }
     return items;
@@ -144,7 +145,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
             type="search"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search by name, email, Instagram…"
+            placeholder="Search by name, email, Instagram, location…"
             className="w-full max-w-md rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-2.5 text-sm text-white placeholder:text-[#555] focus:border-[#DC143C] focus:outline-none"
           />
           {(search || statusFilter !== 'all') && (
@@ -164,13 +165,15 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
         ) : (
           <>
             <div className="overflow-x-auto rounded-xl border border-[#1e1e1e]">
-              <table className="w-full min-w-[860px] text-sm">
+              <table className="w-full min-w-[1080px] text-sm">
                 <thead>
                   <tr className="border-b border-[#1e1e1e] bg-[#111] text-left text-[10px] font-semibold uppercase tracking-wider text-[#555]">
                     <th className="px-4 py-3 w-10">#</th>
                     <th className="px-4 py-3">Name</th>
                     <th className="px-4 py-3">Email</th>
                     <th className="px-4 py-3">Instagram</th>
+                    <th className="px-4 py-3">Location</th>
+                    <th className="px-4 py-3">Brings +2</th>
                     <th className="px-4 py-3">Availability</th>
                     <th className="px-4 py-3">Video</th>
                     <th className="px-4 py-3">Headshot</th>
@@ -216,6 +219,28 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                           </a>
                         ) : (
                           <span className="text-[#333]">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-[#aaa] text-xs">
+                        {sub.location ? (
+                          <span className="block max-w-[140px] truncate" title={sub.location}>
+                            {sub.location}
+                          </span>
+                        ) : (
+                          <span className="text-[#333]">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        {sub.agreed_bring_two === true ? (
+                          <span className="rounded bg-green-500/20 px-2 py-0.5 text-[10px] font-bold uppercase text-green-300">
+                            ✓ Agreed
+                          </span>
+                        ) : sub.agreed_bring_two === false ? (
+                          <span className="rounded bg-red-500/20 px-2 py-0.5 text-[10px] font-bold uppercase text-red-300">
+                            ✗ Declined
+                          </span>
+                        ) : (
+                          <span className="text-[#333] text-xs">—</span>
                         )}
                       </td>
                       <td className="px-4 py-3 max-w-[160px]">

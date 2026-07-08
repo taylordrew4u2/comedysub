@@ -12,12 +12,14 @@ export interface Submission {
   name: string;
   email: string | null;
   instagram: string | null;
+  location: string | null;
   availability: string;
   video_url: string | null;
   headshot_url: string | null;
   source: 'web';
   status: SubmissionStatus;
   admin_notes: string | null;
+  agreed_bring_two: boolean | null;
   submitted_at: string;
 }
 
@@ -28,23 +30,28 @@ export async function ensureTable(): Promise<void> {
       name          TEXT        NOT NULL,
       email         TEXT,
       instagram     TEXT,
+      location      TEXT,
       availability  TEXT        NOT NULL DEFAULT '',
       video_url     TEXT,
       headshot_url  TEXT,
       source        TEXT        NOT NULL DEFAULT 'web',
       status        TEXT        NOT NULL DEFAULT 'new',
       admin_notes   TEXT,
+      agreed_bring_two BOOLEAN,
       submitted_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
   await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS email TEXT`;
   await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS headshot_url TEXT`;
+  await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS location TEXT`;
+  await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS agreed_bring_two BOOLEAN`;
 }
 
 export async function insertSubmission(data: {
   name: string;
   email: string | null;
   instagram: string | null;
+  location: string | null;
   availability: string;
   video_url: string | null;
   headshot_url: string | null;
@@ -53,9 +60,9 @@ export async function insertSubmission(data: {
   await ensureTable();
   const { rows } = await sql`
     INSERT INTO submissions
-      (name, email, instagram, availability, video_url, headshot_url, source)
+      (name, email, instagram, location, availability, video_url, headshot_url, source)
     VALUES
-      (${data.name}, ${data.email}, ${data.instagram},
+      (${data.name}, ${data.email}, ${data.instagram}, ${data.location},
        ${data.availability}, ${data.video_url}, ${data.headshot_url}, ${data.source})
     RETURNING id
   `;
@@ -76,7 +83,7 @@ export async function getSubmissions(
     const { rows } = await sql`
       SELECT * FROM submissions
       WHERE status = ${statusFilter}
-        AND (name ILIKE ${q} OR email ILIKE ${q} OR instagram ILIKE ${q})
+        AND (name ILIKE ${q} OR email ILIKE ${q} OR instagram ILIKE ${q} OR location ILIKE ${q})
       ORDER BY submitted_at DESC
     `;
     return rows as unknown as Submission[];
@@ -93,7 +100,7 @@ export async function getSubmissions(
     const q = `%${search!.trim()}%`;
     const { rows } = await sql`
       SELECT * FROM submissions
-      WHERE name ILIKE ${q} OR email ILIKE ${q} OR instagram ILIKE ${q}
+      WHERE name ILIKE ${q} OR email ILIKE ${q} OR instagram ILIKE ${q} OR location ILIKE ${q}
       ORDER BY submitted_at DESC
     `;
     return rows as unknown as Submission[];
@@ -101,6 +108,13 @@ export async function getSubmissions(
 
   const { rows } = await sql`SELECT * FROM submissions ORDER BY submitted_at DESC`;
   return rows as unknown as Submission[];
+}
+
+export async function setAgreement(id: number, agreed: boolean): Promise<void> {
+  await sql`
+    UPDATE submissions SET agreed_bring_two = ${agreed}
+    WHERE id = ${id} AND agreed_bring_two IS NULL
+  `;
 }
 
 export async function updateSubmission(
