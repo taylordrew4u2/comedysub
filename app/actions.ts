@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { put } from '@vercel/blob';
-import { insertSubmission, updateSubmission } from './lib/db';
+import { insertSubmission, setAgreement, updateSubmission } from './lib/db';
 
 // ── Public Submission ──────────────────────────────────────────────────────────
 
@@ -60,6 +60,15 @@ export async function submitWebForm(
   } catch (err) {
     console.error('DB error:', err);
     return { error: 'Failed to save your submission. Please try again later.' };
+  }
+}
+
+export async function recordAgreement(refId: number, agreed: boolean): Promise<void> {
+  if (!Number.isInteger(refId) || typeof agreed !== 'boolean') return;
+  try {
+    await setAgreement(refId, agreed);
+  } catch (err) {
+    console.error('Agreement update failed:', err);
   }
 }
 

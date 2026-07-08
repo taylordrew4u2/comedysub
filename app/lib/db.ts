@@ -19,6 +19,7 @@ export interface Submission {
   source: 'web';
   status: SubmissionStatus;
   admin_notes: string | null;
+  agreed_bring_two: boolean | null;
   submitted_at: string;
 }
 
@@ -36,12 +37,14 @@ export async function ensureTable(): Promise<void> {
       source        TEXT        NOT NULL DEFAULT 'web',
       status        TEXT        NOT NULL DEFAULT 'new',
       admin_notes   TEXT,
+      agreed_bring_two BOOLEAN,
       submitted_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `;
   await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS email TEXT`;
   await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS headshot_url TEXT`;
   await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS location TEXT`;
+  await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS agreed_bring_two BOOLEAN`;
 }
 
 export async function insertSubmission(data: {
@@ -105,6 +108,13 @@ export async function getSubmissions(
 
   const { rows } = await sql`SELECT * FROM submissions ORDER BY submitted_at DESC`;
   return rows as unknown as Submission[];
+}
+
+export async function setAgreement(id: number, agreed: boolean): Promise<void> {
+  await sql`
+    UPDATE submissions SET agreed_bring_two = ${agreed}
+    WHERE id = ${id} AND agreed_bring_two IS NULL
+  `;
 }
 
 export async function updateSubmission(
