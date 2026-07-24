@@ -54,7 +54,7 @@ function AgreementModal({
           />
           <span className="text-sm leading-relaxed text-white">
             I agree to bring at least <strong>two people</strong> to the show.
-            There is <strong>no drink minimum</strong>.
+            The show is <strong>free</strong> and there is <strong>no drink minimum</strong>.
           </span>
         </label>
 
