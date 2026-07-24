@@ -131,10 +131,10 @@ export default function WebForm() {
         <input
           id="video_url"
           name="video_url"
-          type="url"
+          type="text"
           required
           className={inputClass}
-          placeholder="YouTube, Vimeo, Dropbox — any shareable link"
+          placeholder="YouTube, Vimeo, Dropbox — paste your link any way you like"
         />
       </div>
 
