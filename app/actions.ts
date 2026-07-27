@@ -33,6 +33,12 @@ export async function submitWebForm(
   const location = (formData.get('location') as string)?.trim().slice(0, 100) || null;
   const headshotFile = formData.get('headshot') as File | null;
   const availability = formData.getAll('availability').join(', ') || '';
+  const questions = (formData.get('questions') as string)?.trim().slice(0, 1000) || null;
+
+  // Optional, so "unanswered" stays distinct from "no".
+  const tattooAnswer = formData.get('has_tattoos');
+  const has_tattoos =
+    tattooAnswer === 'yes' ? true : tattooAnswer === 'no' ? false : null;
 
   if (!name || !video_url) {
     return { error: 'Please fill in your name and video link.' };
@@ -62,6 +68,8 @@ export async function submitWebForm(
       availability,
       video_url,
       headshot_url,
+      has_tattoos,
+      questions,
       source: 'web',
     });
     return { success: true, refId: id };

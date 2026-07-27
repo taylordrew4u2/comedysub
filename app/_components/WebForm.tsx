@@ -16,9 +16,34 @@ const MAX_HEADSHOT_BYTES = 8 * 1024 * 1024;
 // Comedians routinely leave mid-form to go copy their video link. Keep what
 // they've typed so coming back doesn't mean starting over.
 const DRAFT_KEY = 'pins-needles-draft-v1';
-const DRAFT_FIELDS = ['name', 'email', 'video_url', 'instagram', 'location'] as const;
+const DRAFT_FIELDS = [
+  'name',
+  'email',
+  'video_url',
+  'instagram',
+  'location',
+  'has_tattoos',
+  'questions',
+] as const;
 
 type Draft = { fields: Record<string, string>; availability: number[] };
+
+/*
+ * The draft covers text inputs, the questions textarea and the tattoo radio
+ * pair. A radio group comes back from form.elements as a RadioNodeList, whose
+ * `value` reads the checked option and, on assignment, checks the one that
+ * matches — so all three kinds are readable and writable the same way.
+ */
+type ValueField = HTMLInputElement | HTMLTextAreaElement | RadioNodeList;
+
+function valueField(form: HTMLFormElement, name: string): ValueField | null {
+  const field = form.elements.namedItem(name);
+  return field instanceof HTMLInputElement ||
+    field instanceof HTMLTextAreaElement ||
+    field instanceof RadioNodeList
+    ? field
+    : null;
+}
 
 function readDraft(): Draft | null {
   try {
@@ -206,6 +231,57 @@ function AvailabilityPicker({
   );
 }
 
+function TattooField() {
+  return (
+    <div>
+      <label className={labelClass}>Do you have any tattoos?</label>
+      <p className="mb-2.5 text-xs text-[#555]">
+        Purely curiosity — it won&apos;t affect whether you&apos;re booked.
+      </p>
+      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Do you have any tattoos?">
+        {[
+          { value: 'yes', label: 'Yes' },
+          { value: 'no', label: 'No' },
+        ].map((option) => (
+          <label key={option.value} className="cursor-pointer">
+            <input
+              type="radio"
+              name="has_tattoos"
+              value={option.value}
+              className="peer sr-only"
+            />
+            <span className="flex h-12 w-full select-none items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] text-sm font-semibold text-[#555] transition peer-checked:border-[#DC143C] peer-checked:bg-[#DC143C]/15 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-[#DC143C]">
+              {option.label}
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function QuestionsField() {
+  return (
+    <div>
+      <label htmlFor="questions" className={labelClass}>
+        Any questions for us? <span className="normal-case font-normal text-[#444]">(optional)</span>
+      </label>
+      <textarea
+        id="questions"
+        name="questions"
+        rows={3}
+        maxLength={1000}
+        enterKeyHint="done"
+        className={`${inputClass} resize-y`}
+        placeholder="Anything you want to know about the show, the slot, the venue…"
+      />
+      <p className="mt-1.5 text-xs text-[#555]">
+        We&apos;ll answer when we get back to you.
+      </p>
+    </div>
+  );
+}
+
 function HeadshotField() {
   const [preview, setPreview] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -323,8 +399,8 @@ export default function WebForm() {
     let restoredSomething = false;
     for (const key of DRAFT_FIELDS) {
       const value = draft.fields[key];
-      const field = form.elements.namedItem(key);
-      if (typeof value === 'string' && value && field instanceof HTMLInputElement) {
+      const field = valueField(form, key);
+      if (typeof value === 'string' && value && field) {
         field.value = value;
         restoredSomething = true;
       }
@@ -347,8 +423,7 @@ export default function WebForm() {
 
     const fields: Record<string, string> = {};
     for (const key of DRAFT_FIELDS) {
-      const field = form.elements.namedItem(key);
-      const value = field instanceof HTMLInputElement ? field.value.trim() : '';
+      const value = valueField(form, key)?.value.trim() ?? '';
       if (value) fields[key] = value;
     }
 
@@ -524,7 +599,11 @@ export default function WebForm() {
 
       <AvailabilityPicker selected={availability} setSelected={setAvailability} />
 
+      <TattooField />
+
       <HeadshotField />
+
+      <QuestionsField />
 
       <button
         type="submit"
