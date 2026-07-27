@@ -23,7 +23,8 @@ export interface Submission {
   submitted_at: string;
 }
 
-export async function ensureTable(): Promise<void> {
+/** Creates the table on first use, and back-fills columns added since. */
+async function ensureTable(): Promise<void> {
   await sql`
     CREATE TABLE IF NOT EXISTS submissions (
       id            SERIAL PRIMARY KEY,
@@ -69,43 +70,13 @@ export async function insertSubmission(data: {
   return rows[0] as { id: number };
 }
 
-export async function getSubmissions(
-  search?: string,
-  statusFilter?: string,
-): Promise<Submission[]> {
+/**
+ * Every submission, newest first. Search and status filtering happen in the
+ * dashboard against this list — see TODO.md if that ever needs to move into
+ * SQL alongside server-side pagination.
+ */
+export async function getSubmissions(): Promise<Submission[]> {
   await ensureTable();
-
-  const hasSearch = !!(search && search.trim());
-  const hasStatus = !!(statusFilter && statusFilter !== 'all');
-
-  if (hasSearch && hasStatus) {
-    const q = `%${search!.trim()}%`;
-    const { rows } = await sql`
-      SELECT * FROM submissions
-      WHERE status = ${statusFilter}
-        AND (name ILIKE ${q} OR email ILIKE ${q} OR instagram ILIKE ${q} OR location ILIKE ${q})
-      ORDER BY submitted_at DESC
-    `;
-    return rows as unknown as Submission[];
-  }
-
-  if (hasStatus) {
-    const { rows } = await sql`
-      SELECT * FROM submissions WHERE status = ${statusFilter} ORDER BY submitted_at DESC
-    `;
-    return rows as unknown as Submission[];
-  }
-
-  if (hasSearch) {
-    const q = `%${search!.trim()}%`;
-    const { rows } = await sql`
-      SELECT * FROM submissions
-      WHERE name ILIKE ${q} OR email ILIKE ${q} OR instagram ILIKE ${q} OR location ILIKE ${q}
-      ORDER BY submitted_at DESC
-    `;
-    return rows as unknown as Submission[];
-  }
-
   const { rows } = await sql`SELECT * FROM submissions ORDER BY submitted_at DESC`;
   return rows as unknown as Submission[];
 }
