@@ -8,6 +8,10 @@
 - [x] Let comedians upload a headshot alongside the video link (requires BLOB_READ_WRITE_TOKEN)
 - [x] Add a closing date / deadline notice to the submission page (set CLOSING_DATE env var)
 - [x] Public "applications closed" toggle for off-season (set APPLICATIONS_OPEN=false)
+- [x] Mobile polish — card view in admin, larger tap targets, no iOS zoom on form fields
+- [x] Normalise pasted video/Instagram links so admin links aren't broken
+- [x] Keep a local draft of the submission form so leaving the page doesn't lose it
+- [x] Let admin delete submissions (with confirmation)
 
 ## Up Next
 - [ ] Send confirmation email to comedian on submission
