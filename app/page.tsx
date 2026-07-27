@@ -100,7 +100,7 @@ export default function HomePage() {
             </a>
             <div className="flex min-h-11 items-center gap-2.5 text-sm text-[#666]">
               <span className="text-[#DC143C]" aria-hidden="true">🕙</span>
-              <span>10:15pm · Aug 6–18</span>
+              <span>22:15 · Aug 6–18</span>
             </div>
           </div>
         </div>
