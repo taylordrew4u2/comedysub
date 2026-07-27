@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { put } from '@vercel/blob';
 import { insertSubmission, setAgreement, updateSubmission } from './lib/db';
+import { normalizeInstagram, toHttpUrl } from './lib/normalize';
 
 // ── Public Submission ──────────────────────────────────────────────────────────
 
@@ -20,8 +21,10 @@ export async function submitWebForm(
 ): Promise<SubmitState> {
   const name = (formData.get('name') as string)?.trim();
   const email = (formData.get('email') as string)?.trim() || null;
-  const video_url = (formData.get('video_url') as string)?.trim() || null;
-  const instagram = (formData.get('instagram') as string)?.trim() || null;
+  const rawVideo = (formData.get('video_url') as string)?.trim() || null;
+  // Keep the raw text when it isn't a link, so nothing the comedian typed is lost.
+  const video_url = toHttpUrl(rawVideo) ?? rawVideo;
+  const instagram = normalizeInstagram(formData.get('instagram') as string);
   const location = (formData.get('location') as string)?.trim().slice(0, 100) || null;
   const headshotFile = formData.get('headshot') as File | null;
   const availability = formData.getAll('availability').join(', ') || '';

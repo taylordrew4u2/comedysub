@@ -3,6 +3,7 @@
 import { useState, useActionState, useMemo, useRef } from 'react';
 import { adminLogout, updateSubmissionAction, type UpdateState } from '../actions';
 import type { Submission, SubmissionStatus } from '../lib/db';
+import { instagramUrl, normalizeInstagram, toHttpUrl } from '../lib/normalize';
 
 const STATUS_OPTIONS: SubmissionStatus[] = [
   'new',
@@ -45,9 +46,18 @@ function StatusBadge({ status }: { status: string }) {
 function RowForm({ sub }: { sub: Submission }) {
   const initial: UpdateState = {};
   const [state, formAction, isPending] = useActionState(updateSubmissionAction, initial);
+  // Without this the button reads "✓ Saved" over edits you haven't saved yet.
+  const [dirty, setDirty] = useState(false);
 
   return (
-    <form action={formAction} className="flex flex-col gap-2">
+    <form
+      action={(formData) => {
+        setDirty(false);
+        formAction(formData);
+      }}
+      onChange={() => setDirty(true)}
+      className="flex flex-col gap-2"
+    >
       <input type="hidden" name="id" value={sub.id} />
       <select
         name="status"
@@ -72,9 +82,13 @@ function RowForm({ sub }: { sub: Submission }) {
       <button
         type="submit"
         disabled={isPending}
-        className="min-h-11 rounded bg-[#DC143C] px-3 py-1 text-xs font-semibold text-white transition hover:bg-[#b01030] disabled:opacity-50 lg:min-h-0"
+        className={`min-h-11 rounded px-3 py-1 text-xs font-semibold transition disabled:opacity-50 lg:min-h-0 ${
+          state.success && !dirty
+            ? 'bg-[#1a1a1a] text-[#666]'
+            : 'bg-[#DC143C] text-white hover:bg-[#b01030]'
+        }`}
       >
-        {isPending ? 'Saving…' : state.success ? '✓ Saved' : 'Save'}
+        {isPending ? 'Saving…' : state.success && !dirty ? '✓ Saved' : 'Save'}
       </button>
       {state.error && <p className="text-[10px] text-red-400">{state.error}</p>}
     </form>
@@ -83,7 +97,10 @@ function RowForm({ sub }: { sub: Submission }) {
 
 /* Mobile/tablet view — a tappable card per submission instead of a wide table. */
 function SubmissionCard({ sub }: { sub: Submission }) {
-  const handle = sub.instagram?.replace(/^@/, '');
+  // Normalised at render so rows saved before normalisation existed link correctly.
+  const handle = normalizeInstagram(sub.instagram);
+  const igHref = instagramUrl(sub.instagram);
+  const videoHref = toHttpUrl(sub.video_url);
 
   return (
     <div className="rounded-xl border border-[#1e1e1e] bg-[#111] p-4">
@@ -117,15 +134,20 @@ function SubmissionCard({ sub }: { sub: Submission }) {
 
       {/* Primary actions — full-size tap targets, no horizontal scrolling. */}
       <div className="mt-3 grid grid-cols-2 gap-2">
-        {sub.video_url ? (
+        {videoHref ? (
           <a
-            href={sub.video_url}
+            href={videoHref}
             target="_blank"
             rel="noopener noreferrer"
             className="col-span-2 flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-[#DC143C] text-sm font-semibold text-white transition hover:bg-[#b01030]"
           >
             ▶ Watch video
           </a>
+        ) : sub.video_url ? (
+          // Not a URL — show what they wrote rather than a link that goes nowhere.
+          <p className="col-span-2 rounded-lg border border-dashed border-[#2a2a2a] px-3 py-2 text-xs break-words text-[#888]">
+            {sub.video_url}
+          </p>
         ) : (
           <p className="col-span-2 flex min-h-11 items-center justify-center rounded-lg border border-dashed border-[#1e1e1e] text-xs text-[#444]">
             No video link
@@ -141,9 +163,9 @@ function SubmissionCard({ sub }: { sub: Submission }) {
             <span className="truncate">Email</span>
           </a>
         )}
-        {handle && (
+        {igHref ? (
           <a
-            href={`https://instagram.com/${handle}`}
+            href={igHref}
             target="_blank"
             rel="noopener noreferrer"
             className="flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-[#2a2a2a] px-2 text-xs text-[#aaa] transition hover:border-[#DC143C] hover:text-white"
@@ -151,7 +173,11 @@ function SubmissionCard({ sub }: { sub: Submission }) {
             <span aria-hidden="true">◎</span>
             <span className="truncate">@{handle}</span>
           </a>
-        )}
+        ) : handle ? (
+          <p className="flex min-h-11 items-center justify-center rounded-lg border border-dashed border-[#2a2a2a] px-2 text-xs text-[#888]">
+            <span className="truncate">{handle}</span>
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
@@ -209,7 +235,8 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
           s.name.toLowerCase().includes(q) ||
           (s.email ?? '').toLowerCase().includes(q) ||
           (s.instagram ?? '').toLowerCase().includes(q) ||
-          (s.location ?? '').toLowerCase().includes(q),
+          (s.location ?? '').toLowerCase().includes(q) ||
+          (s.admin_notes ?? '').toLowerCase().includes(q),
       );
     }
     return items;
@@ -284,7 +311,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
             type="search"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search name, email, location…"
+            placeholder="Search name, email, location, notes…"
             aria-label="Search submissions"
             autoCapitalize="none"
             autoCorrect="off"
@@ -359,17 +386,17 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                           )}
                         </td>
                         <td className="px-4 py-3 text-[#aaa]">
-                          {sub.instagram ? (
+                          {instagramUrl(sub.instagram) ? (
                             <a
-                              href={`https://instagram.com/${sub.instagram.replace(/^@/, '')}`}
+                              href={instagramUrl(sub.instagram)!}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-[#DC143C] hover:underline"
                             >
-                              {sub.instagram.startsWith('@')
-                                ? sub.instagram
-                                : `@${sub.instagram}`}
+                              @{normalizeInstagram(sub.instagram)}
                             </a>
+                          ) : sub.instagram ? (
+                            <span className="text-xs">{normalizeInstagram(sub.instagram)}</span>
                           ) : (
                             <span className="text-[#333]">—</span>
                           )}
@@ -413,15 +440,19 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          {sub.video_url ? (
+                          {toHttpUrl(sub.video_url) ? (
                             <a
-                              href={sub.video_url}
+                              href={toHttpUrl(sub.video_url)!}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1 rounded bg-[#1a1a1a] px-2 py-1 text-xs text-[#DC143C] transition hover:bg-[#2a2a2a]"
                             >
                               ▶ Watch
                             </a>
+                          ) : sub.video_url ? (
+                            <span className="block max-w-[140px] truncate text-xs text-[#888]" title={sub.video_url}>
+                              {sub.video_url}
+                            </span>
                           ) : (
                             <span className="text-[#333] text-xs">—</span>
                           )}
