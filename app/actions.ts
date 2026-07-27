@@ -6,9 +6,12 @@ import { revalidatePath } from 'next/cache';
 import { del, put } from '@vercel/blob';
 import {
   deleteSubmission,
+  deleteTemplate,
   insertSubmission,
+  insertTemplate,
   setAgreement,
   updateSubmission,
+  updateTemplate,
 } from './lib/db';
 import { normalizeInstagram, toHttpUrl } from './lib/normalize';
 
@@ -236,5 +239,80 @@ export async function deleteSubmissionAction(
   } catch (err) {
     console.error('Delete error:', err);
     return { error: 'Failed to delete submission.' };
+  }
+}
+
+// ── Admin Email Templates ──────────────────────────────────────────────────────
+
+async function isAdmin(): Promise<boolean> {
+  const cookieStore = await cookies();
+  return cookieStore.get('admin_auth')?.value === 'true';
+}
+
+export interface TemplateState {
+  error?: string;
+  success?: boolean;
+  /** Set when a brand-new template was created, so the editor can keep
+   *  editing that row instead of creating a second one on the next save. */
+  savedId?: number;
+}
+
+export async function saveTemplateAction(
+  prevState: TemplateState,
+  formData: FormData,
+): Promise<TemplateState> {
+  if (!(await isAdmin())) {
+    return { error: 'Unauthorized' };
+  }
+
+  const rawId = (formData.get('id') as string)?.trim();
+  const id = rawId ? parseInt(rawId, 10) : null;
+  const name = (formData.get('name') as string)?.trim().slice(0, 80) ?? '';
+  const subject = (formData.get('subject') as string)?.trim().slice(0, 200) ?? '';
+  const body = (formData.get('body') as string)?.slice(0, 10000) ?? '';
+
+  if (!name) return { error: 'Give the template a name so you can find it later.' };
+  if (!subject) return { error: 'Add a subject line.' };
+  if (!body.trim()) return { error: 'The email is empty — write something to send.' };
+  if (rawId && !Number.isInteger(id)) return { error: 'That template no longer exists.' };
+
+  try {
+    if (id) {
+      const updated = await updateTemplate(id, { name, subject, body });
+      if (!updated) return { error: 'That template no longer exists.' };
+      revalidatePath('/admin/templates');
+      return { success: true, savedId: id };
+    }
+
+    const { id: newId } = await insertTemplate({ name, subject, body });
+    revalidatePath('/admin/templates');
+    return { success: true, savedId: newId };
+  } catch (err) {
+    console.error('Template save error:', err);
+    return { error: 'Failed to save the template. Please try again.' };
+  }
+}
+
+export async function deleteTemplateAction(
+  prevState: TemplateState,
+  formData: FormData,
+): Promise<TemplateState> {
+  if (!(await isAdmin())) {
+    return { error: 'Unauthorized' };
+  }
+
+  const id = parseInt(formData.get('id') as string, 10);
+  if (!Number.isInteger(id)) {
+    return { error: 'Missing template id.' };
+  }
+
+  try {
+    const removed = await deleteTemplate(id);
+    if (!removed) return { error: 'That template no longer exists.' };
+    revalidatePath('/admin/templates');
+    return { success: true };
+  } catch (err) {
+    console.error('Template delete error:', err);
+    return { error: 'Failed to delete the template.' };
   }
 }

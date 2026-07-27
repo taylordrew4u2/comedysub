@@ -494,16 +494,24 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
     <div className="min-h-dvh bg-[#0a0a0a] text-white">
       <header className="admin-header px-safe sticky top-0 z-20 border-b border-[#1a1a1a] bg-[#0a0a0a]/95 backdrop-blur">
         <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-3">
-          <div className="min-w-0">
+          <div className="min-w-0 truncate">
             <span className="text-sm font-bold text-[#DC143C]">Pins &amp; Needles</span>
             <span className="ml-2 hidden text-xs text-[#555] sm:inline">Admin Dashboard</span>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <Link
+              href="/admin/templates"
+              className="flex min-h-11 items-center rounded-lg border border-[#2a2a2a] px-3 text-xs text-[#888] transition hover:border-[#DC143C] hover:text-white sm:min-h-0 sm:py-1.5"
+            >
+              Emails
+            </Link>
+            <Link
               href="/admin/lineup"
               className="flex min-h-11 items-center gap-1.5 rounded-lg border border-[#2a2a2a] px-3 text-xs text-[#888] transition hover:border-[#DC143C] hover:text-white sm:min-h-0 sm:py-1.5"
             >
-              <span>Export booked</span>
+              {/* The full label doesn't fit beside the other two on a phone. */}
+              <span className="sm:hidden">Lineup</span>
+              <span className="hidden sm:inline">Export booked</span>
               <span className="rounded bg-[#1a1a1a] px-1.5 py-0.5 text-[10px] font-bold text-[#aaa]">
                 {bookedTotal}
               </span>

@@ -26,6 +26,15 @@ export interface Submission {
   submitted_at: string;
 }
 
+/** A reusable email the admin writes once and sends to many comedians. */
+export interface EmailTemplate {
+  id: number;
+  name: string;
+  subject: string;
+  body: string;
+  updated_at: string;
+}
+
 /** Creates the table on first use, and back-fills columns added since. */
 async function ensureTable(): Promise<void> {
   await sql`
@@ -116,4 +125,60 @@ export async function updateSubmission(
 export async function deleteSubmission(id: number): Promise<Submission | null> {
   const { rows } = await sql`DELETE FROM submissions WHERE id = ${id} RETURNING *`;
   return (rows[0] as unknown as Submission) ?? null;
+}
+
+// ── Email templates ────────────────────────────────────────────────────────────
+
+/** Same first-use pattern as the submissions table — no migration step. */
+async function ensureTemplateTable(): Promise<void> {
+  await sql`
+    CREATE TABLE IF NOT EXISTS email_templates (
+      id          SERIAL PRIMARY KEY,
+      name        TEXT        NOT NULL,
+      subject     TEXT        NOT NULL DEFAULT '',
+      body        TEXT        NOT NULL DEFAULT '',
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
+}
+
+export async function getTemplates(): Promise<EmailTemplate[]> {
+  await ensureTemplateTable();
+  const { rows } = await sql`SELECT * FROM email_templates ORDER BY name ASC`;
+  return rows as unknown as EmailTemplate[];
+}
+
+export async function insertTemplate(data: {
+  name: string;
+  subject: string;
+  body: string;
+}): Promise<{ id: number }> {
+  await ensureTemplateTable();
+  const { rows } = await sql`
+    INSERT INTO email_templates (name, subject, body)
+    VALUES (${data.name}, ${data.subject}, ${data.body})
+    RETURNING id
+  `;
+  return rows[0] as { id: number };
+}
+
+/** False when the row has since been deleted, so the caller can say so. */
+export async function updateTemplate(
+  id: number,
+  data: { name: string; subject: string; body: string },
+): Promise<boolean> {
+  await ensureTemplateTable();
+  const { rowCount } = await sql`
+    UPDATE email_templates
+    SET name = ${data.name}, subject = ${data.subject}, body = ${data.body},
+        updated_at = NOW()
+    WHERE id = ${id}
+  `;
+  return (rowCount ?? 0) > 0;
+}
+
+export async function deleteTemplate(id: number): Promise<boolean> {
+  await ensureTemplateTable();
+  const { rowCount } = await sql`DELETE FROM email_templates WHERE id = ${id}`;
+  return (rowCount ?? 0) > 0;
 }

@@ -10,12 +10,18 @@ Built entirely on **free tiers**: Vercel Hobby plan + Vercel Postgres (Neon). No
 
 - **Public submission page** (`/`) — comedians submit their name and a video link
 - **Admin dashboard** (`/admin`) — password-protected, no external auth service
-  - Table of all submissions with search
+  - Table of all submissions with search and sort
   - Clickable video links
   - Status dropdown per row (new / reviewed / contacted / booked / declined)
   - Editable admin notes
   - Summary counts by status
   - Logout
+- **Booked lineup** (`/admin/lineup`) — print-first page; the browser's Save-as-PDF is the export
+- **Email templates** (`/admin/templates`) — write the standard emails once
+  - `{{first_name}}`, `{{availability}}`, `{{video}}` and friends fill in from a submission
+  - Preview against any real applicant, with a warning for details they haven't given
+  - Opens in your own mail app (or copies to the clipboard) — nothing is sent by the app,
+    so no email service, API key, or sending domain is needed
 
 ---
 
@@ -49,7 +55,7 @@ In Vercel project → **Settings** → **Environment Variables**, add these (all
 ### Step 5 — Redeploy
 Go to **Deployments** → latest deployment → **Redeploy**. Done.
 
-The `submissions` table is created automatically on the first request, and new columns are added with `ALTER TABLE … ADD COLUMN IF NOT EXISTS`.
+The `submissions` and `email_templates` tables are created automatically on the first request, and new columns are added with `ALTER TABLE … ADD COLUMN IF NOT EXISTS`.
 
 ---
 
@@ -77,15 +83,19 @@ app/
 ├── layout.tsx              Root layout
 ├── page.tsx                Public submission page
 ├── globals.css             Global styles (dark theme)
-├── actions.ts              Server Actions (submit, login, update)
+├── actions.ts              Server Actions (submit, login, update, templates)
 ├── lib/
-│   └── db.ts               Vercel Postgres helpers + types
+│   ├── db.ts               Vercel Postgres helpers + types
+│   ├── normalize.ts        Turns pasted links/handles into safe hrefs
+│   └── emailTemplate.ts    {{placeholder}} rendering + mailto links
 ├── _components/
 │   └── WebForm.tsx         Comedian submission form (client)
 └── admin/
     ├── page.tsx            Admin page (server — auth check)
     ├── LoginForm.tsx       Admin login form (client)
-    └── AdminDashboard.tsx  Admin dashboard (client)
+    ├── AdminDashboard.tsx  Admin dashboard (client)
+    ├── lineup/             Printable booked lineup
+    └── templates/          Email template editor
 ```
 
 ---
