@@ -27,8 +27,8 @@ export default async function AdminPage() {
 
   if (dbError) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a] px-4">
-        <div className="max-w-md rounded-xl border border-red-500/30 bg-red-500/10 p-8 text-center">
+      <div className="px-safe flex min-h-dvh items-center justify-center bg-[#0a0a0a] py-10">
+        <div className="max-w-md rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center sm:p-8">
           <p className="mb-2 text-lg font-bold text-red-400">Database Error</p>
           <p className="text-sm text-[#aaa]">{dbError}</p>
         </div>
