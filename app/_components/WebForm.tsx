@@ -1,6 +1,6 @@
 'use client';
 
-import { useActionState, useEffect, useRef, useState } from 'react';
+import { useActionState, useCallback, useEffect, useRef, useState } from 'react';
 import { recordAgreement, submitWebForm, type SubmitState } from '../actions';
 
 const initial: SubmitState = {};
@@ -12,6 +12,37 @@ const labelClass = 'block mb-1.5 text-xs font-semibold text-[#666] uppercase tra
 
 const AUG_DATES = Array.from({ length: 13 }, (_, i) => i + 6);
 const MAX_HEADSHOT_BYTES = 8 * 1024 * 1024;
+
+// Comedians routinely leave mid-form to go copy their video link. Keep what
+// they've typed so coming back doesn't mean starting over.
+const DRAFT_KEY = 'pins-needles-draft-v1';
+const DRAFT_FIELDS = ['name', 'email', 'video_url', 'instagram', 'location'] as const;
+
+type Draft = { fields: Record<string, string>; availability: number[] };
+
+function readDraft(): Draft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Draft;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      fields: parsed.fields ?? {},
+      availability: Array.isArray(parsed.availability) ? parsed.availability : [],
+    };
+  } catch {
+    // Private browsing, disabled storage, or corrupt JSON — drafts are a bonus.
+    return null;
+  }
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* nothing to clean up */
+  }
+}
 
 function AgreementModal({
   refId,
@@ -100,13 +131,20 @@ function AgreementModal({
   );
 }
 
-function AvailabilityPicker() {
-  const [selected, setSelected] = useState<number[]>([]);
+function AvailabilityPicker({
+  selected,
+  setSelected,
+}: {
+  selected: number[];
+  setSelected: (next: number[]) => void;
+}) {
   const allSelected = selected.length === AUG_DATES.length;
 
   function toggle(day: number) {
-    setSelected((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
+    setSelected(
+      selected.includes(day)
+        ? selected.filter((d) => d !== day)
+        : [...selected, day],
     );
   }
 
@@ -261,7 +299,80 @@ function HeadshotField() {
 export default function WebForm() {
   const [state, formAction, isPending] = useActionState(submitWebForm, initial);
   const [agreement, setAgreement] = useState<'agreed' | 'declined' | null>(null);
+  const [availability, setAvailability] = useState<number[]>([]);
+  const [draftRestored, setDraftRestored] = useState(false);
   const topRef = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  // Guards the save effect from firing before the restore effect has run.
+  const hydrated = useRef(false);
+
+  /*
+   * Restore after mount rather than via defaultValue: the draft lives in
+   * localStorage, which the server can't read, so seeding it during render
+   * would be a hydration mismatch. Syncing state *from* an external store on
+   * mount is the case the set-state-in-effect rule exempts — it costs one
+   * extra render, once, and only when a draft exists.
+   */
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    const draft = readDraft();
+    hydrated.current = true;
+    const form = formRef.current;
+    if (!draft || !form) return;
+
+    let restoredSomething = false;
+    for (const key of DRAFT_FIELDS) {
+      const value = draft.fields[key];
+      const field = form.elements.namedItem(key);
+      if (typeof value === 'string' && value && field instanceof HTMLInputElement) {
+        field.value = value;
+        restoredSomething = true;
+      }
+    }
+
+    const days = draft.availability.filter((d) => AUG_DATES.includes(d));
+    if (days.length) {
+      setAvailability(days);
+      restoredSomething = true;
+    }
+
+    if (restoredSomething) setDraftRestored(true);
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const saveDraft = useCallback(() => {
+    if (!hydrated.current) return;
+    const form = formRef.current;
+    if (!form) return;
+
+    const fields: Record<string, string> = {};
+    for (const key of DRAFT_FIELDS) {
+      const field = form.elements.namedItem(key);
+      const value = field instanceof HTMLInputElement ? field.value.trim() : '';
+      if (value) fields[key] = value;
+    }
+
+    try {
+      if (!Object.keys(fields).length && !availability.length) {
+        localStorage.removeItem(DRAFT_KEY);
+      } else {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify({ fields, availability }));
+      }
+    } catch {
+      /* storage unavailable — the form still works, it just won't persist */
+    }
+  }, [availability]);
+
+  useEffect(() => {
+    saveDraft();
+  }, [saveDraft]);
+
+  function startOver() {
+    clearDraft();
+    formRef.current?.reset();
+    setAvailability([]);
+    setDraftRestored(false);
+  }
 
   // On a phone the submit button sits well below the fold — pull the result
   // (success or error) back into view instead of leaving a blank screen.
@@ -270,6 +381,11 @@ export default function WebForm() {
       topRef.current?.scrollIntoView({ block: 'center' });
     }
   }, [state.success, state.error]);
+
+  // The draft has served its purpose once the submission is in.
+  useEffect(() => {
+    if (state.success) clearDraft();
+  }, [state.success]);
 
   if (state.success && state.refId) {
     return (
@@ -294,7 +410,13 @@ export default function WebForm() {
   }
 
   return (
-    <form action={formAction} className="space-y-5" encType="multipart/form-data">
+    <form
+      ref={formRef}
+      action={formAction}
+      onChange={saveDraft}
+      className="space-y-5"
+      encType="multipart/form-data"
+    >
       <div ref={topRef} className="scroll-mt-6" aria-live="polite">
         {state.error && (
           <div className="mb-5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
@@ -302,6 +424,21 @@ export default function WebForm() {
           </div>
         )}
       </div>
+
+      {draftRestored && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] px-4 py-3">
+          <p className="text-xs text-[#888]">
+            <span className="text-[#DC143C]">✓</span> We kept what you started earlier.
+          </p>
+          <button
+            type="button"
+            onClick={startOver}
+            className="shrink-0 text-xs font-semibold text-[#666] underline underline-offset-4 transition hover:text-white"
+          >
+            Start over
+          </button>
+        </div>
+      )}
 
       <div className="grid gap-5 sm:grid-cols-2">
         <div>
@@ -385,7 +522,7 @@ export default function WebForm() {
         </div>
       </div>
 
-      <AvailabilityPicker />
+      <AvailabilityPicker selected={availability} setSelected={setAvailability} />
 
       <HeadshotField />
 
