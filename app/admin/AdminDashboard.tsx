@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useActionState, useMemo, useRef } from 'react';
+import { useState, useActionState, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import {
   adminLogout,
   deleteSubmissionAction,
@@ -28,7 +28,19 @@ const STATUS_COLORS: Record<SubmissionStatus, string> = {
   declined: 'bg-red-500/20 text-red-300',
 };
 
+type SortKey = 'newest' | 'oldest' | 'name' | 'status';
+
+const SORT_LABELS: Record<SortKey, string> = {
+  newest: 'Newest first',
+  oldest: 'Oldest first',
+  name: 'Name A–Z',
+  status: 'Status',
+};
+
 const PAGE_SIZE = 25;
+
+/** Shared badge shape so flags read the same in the card and the table. */
+const BADGE = 'rounded px-2 py-0.5 text-[10px] font-bold uppercase whitespace-nowrap';
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString('en-GB', {
@@ -38,22 +50,106 @@ function formatDate(value: string) {
   });
 }
 
+/** Used as a tooltip — two submissions on the same day are otherwise identical. */
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function StatusBadge({ status }: { status: string }) {
   return (
-    <span
-      className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase ${
-        STATUS_COLORS[status as SubmissionStatus] ?? ''
-      }`}
-    >
+    <span className={`${BADGE} ${STATUS_COLORS[status as SubmissionStatus] ?? ''}`}>
       {status}
     </span>
+  );
+}
+
+function Avatar({ sub, className = 'h-12 w-12 text-sm' }: { sub: Submission; className?: string }) {
+  if (sub.headshot_url) {
+    return (
+      <a
+        href={sub.headshot_url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="shrink-0"
+        title={`Open ${sub.name}'s headshot`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={sub.headshot_url}
+          alt={sub.name}
+          className={`${className} rounded-full object-cover ring-1 ring-[#2a2a2a] transition hover:ring-[#DC143C]`}
+        />
+      </a>
+    );
+  }
+  return (
+    <div
+      aria-hidden="true"
+      className={`${className} flex shrink-0 items-center justify-center rounded-full bg-[#1a1a1a] font-bold text-[#5a5a5a]`}
+    >
+      {sub.name.charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
+/** The three yes/no answers, as badges. Renders nothing when none were given. */
+function FlagBadges({ sub }: { sub: Submission }) {
+  const flags: { key: string; label: string; className: string }[] = [];
+
+  if (sub.agreed_bring_two === true) {
+    flags.push({ key: 'plus2', label: '✓ Brings +2', className: 'bg-green-500/20 text-green-300' });
+  } else if (sub.agreed_bring_two === false) {
+    flags.push({ key: 'plus2', label: '✗ Declined +2', className: 'bg-red-500/20 text-red-300' });
+  }
+
+  if (sub.has_tattoos === true) {
+    flags.push({ key: 'ink', label: 'Tattooed', className: 'bg-[#DC143C]/20 text-[#f08ba0]' });
+  } else if (sub.has_tattoos === false) {
+    flags.push({ key: 'ink', label: 'No tattoos', className: 'bg-[#1e1e1e] text-[#777]' });
+  }
+
+  if (sub.multiple_shows === true) {
+    flags.push({ key: 'multi', label: 'Multi-show', className: 'bg-[#DC143C]/20 text-[#f08ba0]' });
+  } else if (sub.multiple_shows === false) {
+    flags.push({ key: 'multi', label: 'One show', className: 'bg-[#1e1e1e] text-[#777]' });
+  }
+
+  if (!flags.length) return <span className="text-xs text-[#333]">—</span>;
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {flags.map((f) => (
+        <span key={f.key} className={`${BADGE} ${f.className}`}>
+          {f.label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function AvailabilityChips({ value }: { value: string }) {
+  if (!value) return <span className="text-xs text-[#333]">—</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {value.split(', ').map((d) => (
+        <span key={d} className="rounded bg-[#1e1e1e] px-1.5 py-0.5 text-[10px] text-[#888]">
+          {d}
+        </span>
+      ))}
+    </div>
   );
 }
 
 /**
  * Deleting is permanent, so it takes two taps: the first swaps in an explicit
  * confirmation rather than firing straight away. Kept in its own form because
- * it can't nest inside the update form beside it.
+ * it can't nest inside the update form above it.
  */
 function DeleteForm({ sub }: { sub: Submission }) {
   const initial: DeleteState = {};
@@ -70,7 +166,9 @@ function DeleteForm({ sub }: { sub: Submission }) {
         >
           Delete
         </button>
-        {state.error && <p className="text-[10px] text-red-400">{state.error}</p>}
+        <p role="status" aria-live="polite" className="text-[10px] text-red-400 empty:hidden">
+          {state.error}
+        </p>
       </div>
     );
   }
@@ -85,7 +183,7 @@ function DeleteForm({ sub }: { sub: Submission }) {
         <button
           type="submit"
           disabled={isPending}
-          className="min-h-11 flex-1 rounded bg-red-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-50 lg:min-h-0"
+          className="min-h-11 flex-1 rounded bg-red-600 px-3 py-1 text-xs font-semibold whitespace-nowrap text-white transition hover:bg-red-700 disabled:opacity-50 lg:min-h-0"
         >
           {isPending ? 'Deleting…' : 'Yes, delete'}
         </button>
@@ -93,65 +191,88 @@ function DeleteForm({ sub }: { sub: Submission }) {
           type="button"
           disabled={isPending}
           onClick={() => setConfirming(false)}
-          className="min-h-11 flex-1 rounded border border-[#2a2a2a] px-3 py-1 text-xs font-semibold text-[#888] transition hover:text-white disabled:opacity-50 lg:min-h-0"
+          className="min-h-11 flex-1 rounded border border-[#2a2a2a] px-3 py-1 text-xs font-semibold whitespace-nowrap text-[#888] transition hover:text-white disabled:opacity-50 lg:min-h-0"
         >
           Cancel
         </button>
       </div>
-      {state.error && <p className="text-[10px] text-red-400">{state.error}</p>}
+      <p role="status" aria-live="polite" className="text-[10px] text-red-400 empty:hidden">
+        {state.error}
+      </p>
     </form>
   );
 }
 
-function RowForm({ sub }: { sub: Submission }) {
+/**
+ * Status + notes editor, with the delete control (`children`) below it.
+ *
+ * The fields are controlled: React resets an uncontrolled form once its action
+ * settles, which threw away a half-written note whenever the save came back
+ * with an error. Holding the values here also makes "unsaved" a comparison
+ * against what the server last accepted, rather than a flag that any stray
+ * change event — a blur, say — could flip back on after a successful save.
+ */
+function RowForm({ sub, children }: { sub: Submission; children?: ReactNode }) {
   const initial: UpdateState = {};
   const [state, formAction, isPending] = useActionState(updateSubmissionAction, initial);
-  // Without this the button reads "✓ Saved" over edits you haven't saved yet.
-  const [dirty, setDirty] = useState(false);
+  const [status, setStatus] = useState<string>(sub.status);
+  const [notes, setNotes] = useState(sub.admin_notes ?? '');
+  const [lastSent, setLastSent] = useState({ status: sub.status as string, notes: sub.admin_notes ?? '' });
+
+  const dirty = status !== lastSent.status || notes !== lastSent.notes;
+  const saved = state.success && !dirty;
 
   return (
-    <form
-      action={(formData) => {
-        setDirty(false);
-        formAction(formData);
-      }}
-      onChange={() => setDirty(true)}
-      className="flex flex-col gap-2"
-    >
-      <input type="hidden" name="id" value={sub.id} />
-      <select
-        name="status"
-        aria-label={`Status for ${sub.name}`}
-        defaultValue={sub.status}
-        className="min-h-11 rounded border border-[#2a2a2a] bg-[#1a1a1a] px-2 py-1 text-xs text-white focus:border-[#DC143C] focus:outline-none lg:min-h-0"
+    <div className="flex flex-col gap-2">
+      <form
+        action={(formData) => {
+          setLastSent({ status, notes });
+          formAction(formData);
+        }}
+        className="flex flex-col gap-2"
       >
-        {STATUS_OPTIONS.map((s) => (
-          <option key={s} value={s}>
-            {s.charAt(0).toUpperCase() + s.slice(1)}
-          </option>
-        ))}
-      </select>
-      <textarea
-        name="admin_notes"
-        aria-label={`Notes for ${sub.name}`}
-        defaultValue={sub.admin_notes ?? ''}
-        rows={2}
-        placeholder="Notes…"
-        className="w-full resize-none rounded border border-[#2a2a2a] bg-[#1a1a1a] px-2 py-1.5 text-xs text-white placeholder:text-[#444] focus:border-[#DC143C] focus:outline-none"
-      />
-      <button
-        type="submit"
-        disabled={isPending}
-        className={`min-h-11 rounded px-3 py-1 text-xs font-semibold transition disabled:opacity-50 lg:min-h-0 ${
-          state.success && !dirty
-            ? 'bg-[#1a1a1a] text-[#666]'
-            : 'bg-[#DC143C] text-white hover:bg-[#b01030]'
-        }`}
-      >
-        {isPending ? 'Saving…' : state.success && !dirty ? '✓ Saved' : 'Save'}
-      </button>
-      {state.error && <p className="text-[10px] text-red-400">{state.error}</p>}
-    </form>
+        <input type="hidden" name="id" value={sub.id} />
+        <select
+          name="status"
+          aria-label={`Status for ${sub.name}`}
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          className="min-h-11 rounded border border-[#2a2a2a] bg-[#1a1a1a] px-2 py-1 text-xs text-white focus:border-[#DC143C] focus:outline-none lg:min-h-0"
+        >
+          {STATUS_OPTIONS.map((s) => (
+            <option key={s} value={s}>
+              {s.charAt(0).toUpperCase() + s.slice(1)}
+            </option>
+          ))}
+        </select>
+        <textarea
+          name="admin_notes"
+          aria-label={`Notes for ${sub.name}`}
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          placeholder="Notes…"
+          className="w-full resize-none rounded border border-[#2a2a2a] bg-[#1a1a1a] px-2 py-1.5 text-xs text-white placeholder:text-[#444] focus:border-[#DC143C] focus:outline-none"
+        />
+        <button
+          type="submit"
+          disabled={isPending || saved}
+          className={`min-h-11 rounded px-3 py-1 text-xs font-semibold transition disabled:opacity-50 lg:min-h-0 ${
+            saved ? 'bg-[#1a1a1a] text-[#666]' : 'bg-[#DC143C] text-white hover:bg-[#b01030]'
+          }`}
+        >
+          {isPending ? 'Saving…' : saved ? '✓ Saved' : dirty ? 'Save changes' : 'Save'}
+        </button>
+        {/* Present from first render so screen readers announce the result. */}
+        <p role="status" aria-live="polite" className="text-[10px] text-red-400 empty:hidden">
+          {state.error}
+          {!state.error && saved ? (
+            <span className="sr-only">Saved {sub.name}&apos;s status and notes.</span>
+          ) : null}
+        </p>
+      </form>
+      {children}
+    </div>
   );
 }
 
@@ -163,22 +284,9 @@ function SubmissionCard({ sub }: { sub: Submission }) {
   const videoHref = toHttpUrl(sub.video_url);
 
   return (
-    <div className="rounded-xl border border-[#1e1e1e] bg-[#111] p-4">
+    <div className="rounded-xl border border-[#1e1e1e] bg-[#111] p-4 transition hover:border-[#2a2a2a]">
       <div className="flex items-start gap-3">
-        {sub.headshot_url ? (
-          <a href={sub.headshot_url} target="_blank" rel="noopener noreferrer" className="shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={sub.headshot_url}
-              alt={sub.name}
-              className="h-12 w-12 rounded-full object-cover ring-1 ring-[#2a2a2a]"
-            />
-          </a>
-        ) : (
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#1a1a1a] text-sm font-bold text-[#444]">
-            {sub.name.charAt(0).toUpperCase()}
-          </div>
-        )}
+        <Avatar sub={sub} />
 
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
@@ -186,7 +294,7 @@ function SubmissionCard({ sub }: { sub: Submission }) {
             <StatusBadge status={sub.status} />
           </div>
           <p className="mt-0.5 truncate text-xs text-[#555]">
-            #{sub.id} · {formatDate(sub.submitted_at)}
+            #{sub.id} · <span title={formatDateTime(sub.submitted_at)}>{formatDate(sub.submitted_at)}</span>
             {sub.location ? ` · ${sub.location}` : ''}
           </p>
         </div>
@@ -241,38 +349,8 @@ function SubmissionCard({ sub }: { sub: Submission }) {
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        {sub.agreed_bring_two === true && (
-          <span className="rounded bg-green-500/20 px-2 py-0.5 text-[10px] font-bold uppercase text-green-300">
-            ✓ Brings +2
-          </span>
-        )}
-        {sub.agreed_bring_two === false && (
-          <span className="rounded bg-red-500/20 px-2 py-0.5 text-[10px] font-bold uppercase text-red-300">
-            ✗ Declined +2
-          </span>
-        )}
-        {sub.has_tattoos === true && (
-          <span className="rounded bg-[#DC143C]/20 px-2 py-0.5 text-[10px] font-bold uppercase text-[#f08ba0]">
-            Tattooed
-          </span>
-        )}
-        {sub.has_tattoos === false && (
-          <span className="rounded bg-[#1e1e1e] px-2 py-0.5 text-[10px] font-bold uppercase text-[#777]">
-            No tattoos
-          </span>
-        )}
-        {sub.multiple_shows === true && (
-          <span className="rounded bg-[#DC143C]/20 px-2 py-0.5 text-[10px] font-bold uppercase text-[#f08ba0]">
-            Wants multiple shows
-          </span>
-        )}
-        {sub.availability
-          ? sub.availability.split(', ').map((d) => (
-              <span key={d} className="rounded bg-[#1e1e1e] px-1.5 py-0.5 text-[10px] text-[#888]">
-                {d}
-              </span>
-            ))
-          : null}
+        <FlagBadges sub={sub} />
+        {sub.availability ? <AvailabilityChips value={sub.availability} /> : null}
       </div>
 
       {sub.questions && (
@@ -295,56 +373,115 @@ function SubmissionCard({ sub }: { sub: Submission }) {
           </span>
           <span className="text-[#555] transition group-open:rotate-180" aria-hidden="true">▾</span>
         </summary>
-        <div className="flex flex-col gap-2 pt-2">
-          <RowForm sub={sub} />
-          <DeleteForm sub={sub} />
+        <div className="pt-2">
+          <RowForm sub={sub}>
+            <DeleteForm sub={sub} />
+          </RowForm>
         </div>
       </details>
     </div>
   );
 }
 
+function sortSubmissions(items: Submission[], sort: SortKey): Submission[] {
+  const sorted = [...items];
+  switch (sort) {
+    case 'oldest':
+      return sorted.sort(
+        (a, b) => +new Date(a.submitted_at) - +new Date(b.submitted_at),
+      );
+    case 'name':
+      return sorted.sort((a, b) => a.name.localeCompare(b.name, 'en-GB', { sensitivity: 'base' }));
+    case 'status':
+      // Grouped in pipeline order, newest first inside each group.
+      return sorted.sort(
+        (a, b) =>
+          STATUS_OPTIONS.indexOf(a.status) - STATUS_OPTIONS.indexOf(b.status) ||
+          +new Date(b.submitted_at) - +new Date(a.submitted_at),
+      );
+    default:
+      return sorted.sort(
+        (a, b) => +new Date(b.submitted_at) - +new Date(a.submitted_at),
+      );
+  }
+}
+
 export default function AdminDashboard({ submissions }: { submissions: Submission[] }) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [sort, setSort] = useState<SortKey>('newest');
   const [page, setPage] = useState(1);
   const listRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  /* Search first, so the stat cards can count within the current search. */
+  const searched = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return submissions;
+    return submissions.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.email ?? '').toLowerCase().includes(q) ||
+        (s.instagram ?? '').toLowerCase().includes(q) ||
+        (s.location ?? '').toLowerCase().includes(q) ||
+        (s.admin_notes ?? '').toLowerCase().includes(q) ||
+        (s.questions ?? '').toLowerCase().includes(q),
+    );
+  }, [submissions, search]);
 
   const filtered = useMemo(() => {
-    let items = submissions;
-    if (statusFilter !== 'all') {
-      items = items.filter((s) => s.status === statusFilter);
-    }
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      items = items.filter(
-        (s) =>
-          s.name.toLowerCase().includes(q) ||
-          (s.email ?? '').toLowerCase().includes(q) ||
-          (s.instagram ?? '').toLowerCase().includes(q) ||
-          (s.location ?? '').toLowerCase().includes(q) ||
-          (s.admin_notes ?? '').toLowerCase().includes(q) ||
-          (s.questions ?? '').toLowerCase().includes(q),
-      );
-    }
-    return items;
-  }, [submissions, search, statusFilter]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+    const items =
+      statusFilter === 'all' ? searched : searched.filter((s) => s.status === statusFilter);
+    return sortSubmissions(items, sort);
+  }, [searched, statusFilter, sort]);
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { total: submissions.length };
+    const c: Record<string, number> = { total: searched.length };
     STATUS_OPTIONS.forEach((s) => {
-      c[s] = submissions.filter((sub) => sub.status === s).length;
+      c[s] = searched.filter((sub) => sub.status === s).length;
     });
     return c;
-  }, [submissions]);
+  }, [searched]);
+
+  const bookedTotal = useMemo(
+    () => submissions.filter((s) => s.status === 'booked').length,
+    [submissions],
+  );
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  // Clamped rather than stored, so deleting the last row of the last page lands
+  // you on the new last page instead of an empty one. Paging reads this too.
+  const currentPage = Math.min(page, totalPages);
+  const firstOnPage = (currentPage - 1) * PAGE_SIZE;
+  const paginated = filtered.slice(firstOnPage, firstOnPage + PAGE_SIZE);
+
+  // "/" jumps to search from anywhere, the way every other admin tool works.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el?.closest('input, textarea, select, [contenteditable="true"]')) return;
+      e.preventDefault();
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  const filtersActive = search.trim() !== '' || statusFilter !== 'all';
 
   function handleFilterClick(s: string) {
-    setStatusFilter(s);
+    // Tapping the active card again clears it, so the filter is never a trap.
+    setStatusFilter((current) => (current === s && s !== 'all' ? 'all' : s));
     setPage(1);
+  }
+
+  function clearFilters() {
+    setSearch('');
+    setStatusFilter('all');
+    setPage(1);
+    searchRef.current?.focus();
   }
 
   // Paging on a phone otherwise leaves you at the bottom of the previous page.
@@ -355,8 +492,8 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
 
   return (
     <div className="min-h-dvh bg-[#0a0a0a] text-white">
-      <header className="px-safe pt-safe sticky top-0 z-10 border-b border-[#1a1a1a] bg-[#0a0a0a]/95 py-3 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+      <header className="admin-header px-safe sticky top-0 z-20 border-b border-[#1a1a1a] bg-[#0a0a0a]/95 backdrop-blur">
+        <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-3">
           <div className="min-w-0">
             <span className="text-sm font-bold text-[#DC143C]">Pins &amp; Needles</span>
             <span className="ml-2 hidden text-xs text-[#555] sm:inline">Admin Dashboard</span>
@@ -364,18 +501,21 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
           <div className="flex shrink-0 items-center gap-2">
             <Link
               href="/admin/lineup"
-              className="flex min-h-11 items-center rounded-lg border border-[#2a2a2a] px-3 text-xs text-[#888] transition hover:border-[#DC143C] hover:text-white sm:min-h-0 sm:py-1.5"
+              className="flex min-h-11 items-center gap-1.5 rounded-lg border border-[#2a2a2a] px-3 text-xs text-[#888] transition hover:border-[#DC143C] hover:text-white sm:min-h-0 sm:py-1.5"
             >
-              Export booked
+              <span>Export booked</span>
+              <span className="rounded bg-[#1a1a1a] px-1.5 py-0.5 text-[10px] font-bold text-[#aaa]">
+                {bookedTotal}
+              </span>
             </Link>
-          <form action={adminLogout}>
-            <button
-              type="submit"
-              className="min-h-11 shrink-0 rounded-lg border border-[#2a2a2a] px-3 text-xs text-[#888] transition hover:border-[#DC143C] hover:text-white sm:min-h-0 sm:py-1.5"
-            >
-              Logout
-            </button>
-          </form>
+            <form action={adminLogout}>
+              <button
+                type="submit"
+                className="min-h-11 shrink-0 rounded-lg border border-[#2a2a2a] px-3 text-xs text-[#888] transition hover:border-[#DC143C] hover:text-white sm:min-h-0 sm:py-1.5"
+              >
+                Logout
+              </button>
+            </form>
           </div>
         </div>
       </header>
@@ -384,7 +524,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
         {/* ── Stats / Filter cards ── */}
         <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-6">
           <StatCard
-            label="Total"
+            label={search.trim() ? 'Matches' : 'Total'}
             value={counts.total}
             accent
             active={statusFilter === 'all'}
@@ -401,34 +541,96 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
           ))}
         </div>
 
-        {/* ── Search ── */}
-        <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search name, email, notes, questions…"
-            aria-label="Search submissions"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
-            enterKeyHint="search"
-            className="w-full min-h-12 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-2.5 text-base text-white placeholder:text-[#555] focus:border-[#DC143C] focus:outline-none sm:max-w-md sm:text-sm"
-          />
-          {(search || statusFilter !== 'all') && (
-            <p className="text-xs text-[#666]">
-              {filtered.length} of {submissions.length} submissions
-            </p>
+        {/* ── Search / sort ── */}
+        <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+          <div className="relative w-full sm:max-w-md">
+            <input
+              ref={searchRef}
+              type="search"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape' && search) {
+                  e.preventDefault();
+                  setSearch('');
+                  setPage(1);
+                }
+              }}
+              placeholder="Search name, email, notes, questions…"
+              aria-label="Search submissions"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="search"
+              className="min-h-12 w-full rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-2.5 text-base text-white placeholder:text-[#555] focus:border-[#DC143C] focus:outline-none sm:text-sm"
+            />
+            {!search && (
+              <kbd
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 right-3 hidden -translate-y-1/2 rounded border border-[#2a2a2a] bg-[#111] px-1.5 py-0.5 font-sans text-[10px] text-[#555] lg:block"
+              >
+                /
+              </kbd>
+            )}
+          </div>
+
+          <label className="flex items-center gap-2 text-xs text-[#666]">
+            <span className="shrink-0">Sort</span>
+            <select
+              value={sort}
+              onChange={(e) => {
+                setSort(e.target.value as SortKey);
+                setPage(1);
+              }}
+              aria-label="Sort submissions"
+              className="min-h-12 w-full rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-2 text-base text-white focus:border-[#DC143C] focus:outline-none sm:min-h-0 sm:w-auto sm:py-2 sm:text-sm"
+            >
+              {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
+                <option key={key} value={key}>
+                  {SORT_LABELS[key]}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {filtersActive && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="min-h-12 rounded-lg border border-[#2a2a2a] px-3 text-xs text-[#888] transition hover:border-[#DC143C] hover:text-white sm:min-h-0 sm:py-2"
+            >
+              Clear filters
+            </button>
           )}
+
+          <p role="status" aria-live="polite" className="text-xs text-[#666] sm:ml-auto">
+            {filtersActive
+              ? `${filtered.length} of ${submissions.length} submissions`
+              : `${submissions.length} submission${submissions.length === 1 ? '' : 's'}`}
+          </p>
         </div>
 
         {/* ── Results ── */}
-        <div ref={listRef} className="scroll-mt-20">
+        <div ref={listRef} className="admin-scroll-anchor">
           {filtered.length === 0 ? (
-            <div className="rounded-xl border border-[#1e1e1e] bg-[#111] py-16 text-center text-[#555]">
-              {submissions.length === 0
-                ? 'No submissions yet.'
-                : 'No results match your filters.'}
+            <div className="rounded-xl border border-[#1e1e1e] bg-[#111] px-6 py-16 text-center">
+              <p className="text-[#555]">
+                {submissions.length === 0
+                  ? 'No submissions yet.'
+                  : 'No results match your filters.'}
+              </p>
+              {filtersActive && (
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="mt-4 min-h-11 rounded-lg border border-[#2a2a2a] px-4 text-xs font-semibold text-[#888] transition hover:border-[#DC143C] hover:text-white"
+                >
+                  Clear filters
+                </button>
+              )}
             </div>
           ) : (
             <>
@@ -439,189 +641,137 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                 ))}
               </div>
 
-              {/* Table — desktop only, where 1080px actually fits */}
+              {/* Table — desktop only, where the full width actually fits */}
               <div className="hidden overflow-x-auto rounded-xl border border-[#1e1e1e] lg:block">
-                <table className="w-full min-w-[1420px] text-sm">
+                <table className="w-full min-w-[1180px] text-sm">
                   <thead>
                     <tr className="border-b border-[#1e1e1e] bg-[#111] text-left text-[10px] font-semibold uppercase tracking-wider text-[#555]">
-                      <th className="px-4 py-3 w-10">#</th>
-                      <th className="px-4 py-3">Name</th>
-                      <th className="px-4 py-3">Email</th>
-                      <th className="px-4 py-3">Instagram</th>
-                      <th className="px-4 py-3">Location</th>
-                      <th className="px-4 py-3">Brings +2</th>
-                      <th className="px-4 py-3">Tattoos</th>
-                      <th className="px-4 py-3">Questions</th>
-                      <th className="px-4 py-3">Availability</th>
-                      <th className="px-4 py-3">Multi</th>
+                      <th className="px-4 py-3">Comedian</th>
+                      <th className="px-4 py-3">Contact</th>
                       <th className="px-4 py-3">Video</th>
-                      <th className="px-4 py-3">Headshot</th>
+                      <th className="px-4 py-3">Available</th>
+                      <th className="px-4 py-3">Answers</th>
+                      <th className="px-4 py-3">Questions</th>
                       <th className="px-4 py-3">Submitted</th>
-                      <th className="px-4 py-3 w-40">Status / Notes</th>
+                      <th className="w-56 px-4 py-3">Status / Notes</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {paginated.map((sub, i) => (
-                      <tr
-                        key={sub.id}
-                        className={`border-b border-[#1a1a1a] transition hover:bg-[#111] ${
-                          i % 2 === 0 ? 'bg-[#0d0d0d]' : 'bg-[#0a0a0a]'
-                        }`}
-                      >
-                        <td className="px-4 py-3 text-[#444] text-xs">{sub.id}</td>
-                        <td className="px-4 py-3 font-medium text-white whitespace-nowrap">
-                          {sub.name}
-                        </td>
-                        <td className="px-4 py-3 text-[#aaa] text-xs">
-                          {sub.email ? (
-                            <a
-                              href={`mailto:${sub.email}`}
-                              className="text-[#DC143C] hover:underline"
-                            >
-                              {sub.email}
-                            </a>
-                          ) : (
-                            <span className="text-[#333]">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-[#aaa]">
-                          {instagramUrl(sub.instagram) ? (
-                            <a
-                              href={instagramUrl(sub.instagram)!}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[#DC143C] hover:underline"
-                            >
-                              @{normalizeInstagram(sub.instagram)}
-                            </a>
-                          ) : sub.instagram ? (
-                            <span className="text-xs">{normalizeInstagram(sub.instagram)}</span>
-                          ) : (
-                            <span className="text-[#333]">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-[#aaa] text-xs">
-                          {sub.location ? (
-                            <span className="block max-w-[140px] truncate" title={sub.location}>
-                              {sub.location}
-                            </span>
-                          ) : (
-                            <span className="text-[#333]">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {sub.agreed_bring_two === true ? (
-                            <span className="rounded bg-green-500/20 px-2 py-0.5 text-[10px] font-bold uppercase text-green-300">
-                              ✓ Agreed
-                            </span>
-                          ) : sub.agreed_bring_two === false ? (
-                            <span className="rounded bg-red-500/20 px-2 py-0.5 text-[10px] font-bold uppercase text-red-300">
-                              ✗ Declined
-                            </span>
-                          ) : (
-                            <span className="text-[#333] text-xs">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {sub.has_tattoos === true ? (
-                            <span className="rounded bg-[#DC143C]/20 px-2 py-0.5 text-[10px] font-bold uppercase text-[#f08ba0]">
-                              Yes
-                            </span>
-                          ) : sub.has_tattoos === false ? (
-                            <span className="rounded bg-[#1e1e1e] px-2 py-0.5 text-[10px] font-bold uppercase text-[#777]">
-                              No
-                            </span>
-                          ) : (
-                            <span className="text-[#333] text-xs">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 max-w-[220px]">
-                          {sub.questions ? (
-                            <span
-                              className="block text-xs leading-relaxed text-[#bbb]"
-                              title={sub.questions}
-                            >
-                              {sub.questions}
-                            </span>
-                          ) : (
-                            <span className="text-[#333] text-xs">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 max-w-[160px]">
-                          {sub.availability ? (
-                            <div className="flex flex-wrap gap-1">
-                              {sub.availability.split(', ').map((d) => (
-                                <span
-                                  key={d}
-                                  className="rounded bg-[#1e1e1e] px-1.5 py-0.5 text-[10px] text-[#888]"
-                                >
-                                  {d}
-                                </span>
-                              ))}
+                    {paginated.map((sub, i) => {
+                      const handle = normalizeInstagram(sub.instagram);
+                      const igHref = instagramUrl(sub.instagram);
+                      const videoHref = toHttpUrl(sub.video_url);
+
+                      return (
+                        <tr
+                          key={sub.id}
+                          className={`border-b border-[#1a1a1a] align-top transition hover:bg-[#141414] ${
+                            i % 2 === 0 ? 'bg-[#0d0d0d]' : 'bg-[#0a0a0a]'
+                          }`}
+                        >
+                          {/* Identity — avatar, name, status and where they are, in one cell. */}
+                          <td className="px-4 py-3">
+                            <div className="flex items-start gap-3">
+                              <Avatar sub={sub} className="h-10 w-10 text-xs" />
+                              <div className="min-w-0">
+                                <p className="font-medium text-white">{sub.name}</p>
+                                <p className="mt-0.5 truncate text-[11px] text-[#555]">
+                                  #{sub.id}
+                                  {sub.location ? ` · ${sub.location}` : ''}
+                                </p>
+                                <div className="mt-1.5">
+                                  <StatusBadge status={sub.status} />
+                                </div>
+                              </div>
                             </div>
-                          ) : (
-                            <span className="text-[#333] text-xs">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {sub.multiple_shows === true ? (
-                            <span className="rounded bg-[#DC143C]/20 px-2 py-0.5 text-[10px] font-bold uppercase text-[#f08ba0]">
-                              Yes
+                          </td>
+
+                          <td className="max-w-[200px] px-4 py-3 text-xs">
+                            <div className="flex flex-col gap-1">
+                              {sub.email ? (
+                                <a
+                                  href={`mailto:${sub.email}`}
+                                  className="truncate text-[#DC143C] hover:underline"
+                                  title={sub.email}
+                                >
+                                  {sub.email}
+                                </a>
+                              ) : null}
+                              {igHref ? (
+                                <a
+                                  href={igHref}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="truncate text-[#aaa] hover:text-[#DC143C] hover:underline"
+                                >
+                                  @{handle}
+                                </a>
+                              ) : handle ? (
+                                <span className="truncate text-[#888]">{handle}</span>
+                              ) : null}
+                              {!sub.email && !handle ? (
+                                <span className="text-[#333]">—</span>
+                              ) : null}
+                            </div>
+                          </td>
+
+                          <td className="px-4 py-3">
+                            {videoHref ? (
+                              <a
+                                href={videoHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 rounded bg-[#1a1a1a] px-2 py-1 text-xs text-[#DC143C] transition hover:bg-[#2a2a2a]"
+                              >
+                                ▶ Watch
+                              </a>
+                            ) : sub.video_url ? (
+                              <span
+                                className="block max-w-[140px] truncate text-xs text-[#888]"
+                                title={sub.video_url}
+                              >
+                                {sub.video_url}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-[#333]">—</span>
+                            )}
+                          </td>
+
+                          <td className="max-w-[150px] px-4 py-3">
+                            <AvailabilityChips value={sub.availability} />
+                          </td>
+
+                          <td className="max-w-[140px] px-4 py-3">
+                            <FlagBadges sub={sub} />
+                          </td>
+
+                          <td className="max-w-[220px] px-4 py-3">
+                            {sub.questions ? (
+                              <span
+                                className="line-clamp-3 text-xs leading-relaxed text-[#bbb]"
+                                title={sub.questions}
+                              >
+                                {sub.questions}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-[#333]">—</span>
+                            )}
+                          </td>
+
+                          <td className="px-4 py-3 text-xs whitespace-nowrap text-[#555]">
+                            <span title={formatDateTime(sub.submitted_at)}>
+                              {formatDate(sub.submitted_at)}
                             </span>
-                          ) : sub.multiple_shows === false ? (
-                            <span className="rounded bg-[#1e1e1e] px-2 py-0.5 text-[10px] font-bold uppercase text-[#777]">
-                              No
-                            </span>
-                          ) : (
-                            <span className="text-[#333] text-xs">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {toHttpUrl(sub.video_url) ? (
-                            <a
-                              href={toHttpUrl(sub.video_url)!}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 rounded bg-[#1a1a1a] px-2 py-1 text-xs text-[#DC143C] transition hover:bg-[#2a2a2a]"
-                            >
-                              ▶ Watch
-                            </a>
-                          ) : sub.video_url ? (
-                            <span className="block max-w-[140px] truncate text-xs text-[#888]" title={sub.video_url}>
-                              {sub.video_url}
-                            </span>
-                          ) : (
-                            <span className="text-[#333] text-xs">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {sub.headshot_url ? (
-                            <a href={sub.headshot_url} target="_blank" rel="noopener noreferrer">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={sub.headshot_url}
-                                alt={sub.name}
-                                className="h-10 w-10 rounded-full object-cover ring-1 ring-[#2a2a2a]"
-                              />
-                            </a>
-                          ) : (
-                            <span className="text-[#333] text-xs">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-[#555] text-xs whitespace-nowrap">
-                          {formatDate(sub.submitted_at)}
-                        </td>
-                        <td className="px-4 py-3 w-40">
-                          <div className="mb-2">
-                            <StatusBadge status={sub.status} />
-                          </div>
-                          <div className="flex flex-col gap-2">
-                            <RowForm sub={sub} />
-                            <DeleteForm sub={sub} />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+
+                          <td className="w-56 px-4 py-3">
+                            <RowForm sub={sub}>
+                              <DeleteForm sub={sub} />
+                            </RowForm>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -630,7 +780,8 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
               {totalPages > 1 && (
                 <div className="mt-5 flex flex-col-reverse items-center gap-3 text-xs text-[#666] sm:flex-row sm:justify-between">
                   <span>
-                    Page {currentPage} of {totalPages} · {filtered.length} submissions
+                    Showing {firstOnPage + 1}–{firstOnPage + paginated.length} of {filtered.length}
+                    <span className="hidden sm:inline"> · page {currentPage} of {totalPages}</span>
                   </span>
                   <div className="flex w-full gap-2 sm:w-auto">
                     <button
@@ -680,7 +831,7 @@ function StatCard({
         active
           ? 'border-[#DC143C] bg-[#DC143C]/10'
           : 'border-[#1e1e1e] bg-[#111] hover:border-[#DC143C]/50'
-      }`}
+      } ${value === 0 && !active ? 'opacity-60' : ''}`}
     >
       <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-[#555]">
         {label}

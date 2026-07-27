@@ -7,6 +7,8 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
+  /* Height of the sticky admin bar — shared so anchors can clear it exactly. */
+  --admin-header-h: calc(var(--safe-top) + 3.5rem);
 }
 
 html {
@@ -65,6 +67,18 @@ select,
 .px-safe {
   padding-left: max(1rem, var(--safe-left));
   padding-right: max(1rem, var(--safe-right));
+}
+
+/*
+ * A fixed header height keeps the bar from growing when its buttons wrap, and
+ * gives paging a scroll target that lands just below it instead of under it.
+ */
+.admin-header {
+  height: var(--admin-header-h);
+  padding-top: var(--safe-top);
+}
+.admin-scroll-anchor {
+  scroll-margin-top: calc(var(--admin-header-h) + 0.75rem);
 }
 
 /*

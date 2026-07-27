@@ -16,6 +16,7 @@
 - [x] Make every field required except questions
 - [x] Ask about doing multiple shows when more than one date is offered
 - [x] Export the booked lineup as a PDF from the admin dashboard
+- [x] Admin polish — sort order, "/" to search, denser desktop table, notes no longer lost when a save fails
 
 ## Up Next
 - [ ] Send confirmation email to comedian on submission
