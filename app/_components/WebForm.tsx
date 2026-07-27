@@ -1,15 +1,17 @@
 'use client';
 
-import { useActionState, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import { recordAgreement, submitWebForm, type SubmitState } from '../actions';
 
 const initial: SubmitState = {};
 
+// py-3 + 16px mobile type (see globals.css) keeps every field a ≥44px tap target.
 const inputClass =
-  'w-full rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] px-3 py-2.5 text-sm text-white placeholder:text-[#444] focus:border-[#DC143C] focus:outline-none focus:ring-1 focus:ring-[#DC143C]/50';
+  'w-full rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] px-3.5 py-3 text-base text-white placeholder:text-[#444] focus:border-[#DC143C] focus:outline-none focus:ring-1 focus:ring-[#DC143C]/50 sm:text-sm';
 const labelClass = 'block mb-1.5 text-xs font-semibold text-[#666] uppercase tracking-wider';
 
 const AUG_DATES = Array.from({ length: 13 }, (_, i) => i + 6);
+const MAX_HEADSHOT_BYTES = 8 * 1024 * 1024;
 
 function AgreementModal({
   refId,
@@ -20,6 +22,15 @@ function AgreementModal({
 }) {
   const [checked, setChecked] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Freeze the page behind the sheet so mobile scroll stays inside the dialog.
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
 
   async function answer(agreed: boolean) {
     setSaving(true);
@@ -35,9 +46,12 @@ function AgreementModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="agreement-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/80 backdrop-blur-sm sm:items-center sm:p-4"
     >
-      <div className="w-full max-w-md rounded-2xl border border-[#2a2a2a] bg-[#111] p-6 sm:p-8">
+      <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-[#2a2a2a] bg-[#111] p-6 pb-[calc(1.5rem+var(--safe-bottom))] sm:rounded-2xl sm:p-8 sm:pb-8">
+        {/* Grab handle — signals "sheet" on mobile. */}
+        <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-[#2a2a2a] sm:hidden" aria-hidden="true" />
+
         <p id="agreement-title" className="mb-2 text-xl font-extrabold text-white">
           One last thing
         </p>
@@ -45,12 +59,12 @@ function AgreementModal({
           Comedians who agree to the below will take priority when we book the lineup.
         </p>
 
-        <label className="mb-6 flex cursor-pointer items-start gap-3 rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] p-4">
+        <label className="mb-6 flex cursor-pointer items-start gap-3 rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] p-4 transition active:border-[#DC143C]/60">
           <input
             type="checkbox"
             checked={checked}
             onChange={(e) => setChecked(e.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 accent-[#DC143C]"
+            className="mt-0.5 h-5 w-5 shrink-0 accent-[#DC143C]"
           />
           <span className="text-sm leading-relaxed text-white">
             I agree to bring at least <strong>two people</strong> to the show.
@@ -58,25 +72,188 @@ function AgreementModal({
           </span>
         </label>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <button
-            type="button"
-            disabled={!checked || saving}
-            onClick={() => answer(true)}
-            className="rounded-xl bg-[#DC143C] py-3 text-sm font-extrabold uppercase tracking-widest text-white transition hover:bg-[#b01030] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {saving ? 'Saving…' : 'I Agree'}
-          </button>
+        <div className="flex flex-col-reverse gap-3 sm:grid sm:grid-cols-2">
           <button
             type="button"
             disabled={saving}
             onClick={() => answer(false)}
-            className="rounded-xl border border-[#2a2a2a] py-3 text-sm font-semibold uppercase tracking-widest text-[#888] transition hover:border-[#555] hover:text-white disabled:opacity-40"
+            className="min-h-12 rounded-xl border border-[#2a2a2a] py-3 text-sm font-semibold uppercase tracking-widest text-[#888] transition hover:border-[#555] hover:text-white disabled:opacity-40"
           >
             I Disagree
           </button>
+          <button
+            type="button"
+            disabled={!checked || saving}
+            onClick={() => answer(true)}
+            className="min-h-12 rounded-xl bg-[#DC143C] py-3 text-sm font-extrabold uppercase tracking-widest text-white transition hover:bg-[#b01030] disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {saving ? 'Saving…' : 'I Agree'}
+          </button>
+        </div>
+        {!checked && (
+          <p className="mt-3 text-center text-[11px] text-[#555]">
+            Tick the box above to agree.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AvailabilityPicker() {
+  const [selected, setSelected] = useState<number[]>([]);
+  const allSelected = selected.length === AUG_DATES.length;
+
+  function toggle(day: number) {
+    setSelected((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between gap-3">
+        <span className={`${labelClass} mb-0`}>Available dates</span>
+        {/* -my-2 py-2 keeps the tap target ~44px tall without adding visible height. */}
+        <div className="-my-2 flex shrink-0 items-center gap-3">
+          {selected.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setSelected([])}
+              className="px-1 py-2 text-xs font-semibold text-[#666] underline underline-offset-4 transition hover:text-white"
+            >
+              Clear
+            </button>
+          )}
+          {!allSelected && (
+            <button
+              type="button"
+              onClick={() => setSelected([...AUG_DATES])}
+              className="px-1 py-2 text-xs font-semibold text-[#DC143C] underline underline-offset-4 transition hover:text-white"
+            >
+              Select all
+            </button>
+          )}
         </div>
       </div>
+      <p className="mb-2.5 text-xs text-[#555]">
+        {selected.length > 0
+          ? `${selected.length} date${selected.length === 1 ? '' : 's'} selected`
+          : 'Tap the nights you can perform (Aug 6–18).'}
+      </p>
+
+      <div
+        className="grid grid-cols-5 gap-2 sm:grid-cols-7"
+        role="group"
+        aria-label="Available dates in August"
+      >
+        {AUG_DATES.map((d) => (
+          <label key={d} className="cursor-pointer">
+            <input
+              type="checkbox"
+              name="availability"
+              value={`Aug ${d}`}
+              checked={selected.includes(d)}
+              onChange={() => toggle(d)}
+              className="peer sr-only"
+            />
+            <span className="flex h-12 w-full select-none flex-col items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] text-sm font-semibold text-[#555] transition peer-checked:border-[#DC143C] peer-checked:bg-[#DC143C]/15 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-[#DC143C]">
+              <span className="text-[9px] uppercase tracking-wider opacity-60">Aug</span>
+              {d}
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HeadshotField() {
+  const [preview, setPreview] = useState<string | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [sizeError, setSizeError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Revoke the last object URL whenever it's replaced or the field unmounts.
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    setSizeError(null);
+
+    if (!file) {
+      setPreview(null);
+      setFileName(null);
+      return;
+    }
+
+    if (file.size > MAX_HEADSHOT_BYTES) {
+      setSizeError('That image is over 8 MB — please pick a smaller one.');
+      e.target.value = '';
+      setPreview(null);
+      setFileName(null);
+      return;
+    }
+
+    setPreview(URL.createObjectURL(file));
+    setFileName(file.name);
+  }
+
+  function clear() {
+    if (inputRef.current) inputRef.current.value = '';
+    setPreview(null);
+    setFileName(null);
+    setSizeError(null);
+  }
+
+  return (
+    <div>
+      <label htmlFor="headshot" className={labelClass}>
+        Headshot <span className="normal-case font-normal text-[#444]">(optional)</span>
+      </label>
+
+      <input
+        ref={inputRef}
+        id="headshot"
+        name="headshot"
+        type="file"
+        accept="image/*"
+        onChange={handleChange}
+        className="sr-only"
+      />
+
+      {preview ? (
+        <div className="flex items-center gap-3 rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] p-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={preview}
+            alt="Headshot preview"
+            className="h-14 w-14 shrink-0 rounded-lg object-cover ring-1 ring-[#2a2a2a]"
+          />
+          <p className="min-w-0 flex-1 truncate text-xs text-[#888]">{fileName}</p>
+          <button
+            type="button"
+            onClick={clear}
+            className="min-h-11 shrink-0 rounded-lg border border-[#2a2a2a] px-3 text-xs font-semibold text-[#888] transition hover:border-[#DC143C] hover:text-white"
+          >
+            Remove
+          </button>
+        </div>
+      ) : (
+        <label
+          htmlFor="headshot"
+          className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-[#2a2a2a] bg-[#0a0a0a] px-4 py-3 text-sm text-[#666] transition hover:border-[#DC143C]/60 hover:text-white"
+        >
+          <span aria-hidden="true">📷</span>
+          Take or choose a photo
+        </label>
+      )}
+
+      {sizeError && <p className="mt-1.5 text-xs text-red-400">{sizeError}</p>}
     </div>
   );
 }
@@ -84,6 +261,15 @@ function AgreementModal({
 export default function WebForm() {
   const [state, formAction, isPending] = useActionState(submitWebForm, initial);
   const [agreement, setAgreement] = useState<'agreed' | 'declined' | null>(null);
+  const topRef = useRef<HTMLDivElement>(null);
+
+  // On a phone the submit button sits well below the fold — pull the result
+  // (success or error) back into view instead of leaving a blank screen.
+  useEffect(() => {
+    if (state.success || state.error) {
+      topRef.current?.scrollIntoView({ block: 'center' });
+    }
+  }, [state.success, state.error]);
 
   if (state.success && state.refId) {
     return (
@@ -91,7 +277,7 @@ export default function WebForm() {
         {agreement === null && (
           <AgreementModal refId={state.refId} onDone={(a) => setAgreement(a ? 'agreed' : 'declined')} />
         )}
-        <div className="py-6 text-center">
+        <div ref={topRef} className="scroll-mt-6 py-6 text-center">
           <p className="mb-1 text-2xl font-extrabold text-white">You&apos;re in!</p>
           <p className="text-sm text-[#666]">
             We&apos;ll be in touch if you&apos;re shortlisted.
@@ -108,21 +294,44 @@ export default function WebForm() {
   }
 
   return (
-    <form action={formAction} className="space-y-4" encType="multipart/form-data">
-      {state.error && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-xs text-red-400">
-          {state.error}
-        </div>
-      )}
+    <form action={formAction} className="space-y-5" encType="multipart/form-data">
+      <div ref={topRef} className="scroll-mt-6" aria-live="polite">
+        {state.error && (
+          <div className="mb-5 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+            {state.error}
+          </div>
+        )}
+      </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-5 sm:grid-cols-2">
         <div>
           <label htmlFor="name" className={labelClass}>Name *</label>
-          <input id="name" name="name" required autoComplete="name" className={inputClass} placeholder="Jane Doe" />
+          <input
+            id="name"
+            name="name"
+            required
+            autoComplete="name"
+            autoCapitalize="words"
+            enterKeyHint="next"
+            className={inputClass}
+            placeholder="Jane Doe"
+          />
         </div>
         <div>
           <label htmlFor="email" className={labelClass}>Email</label>
-          <input id="email" name="email" type="email" autoComplete="email" className={inputClass} placeholder="jane@example.com" />
+          <input
+            id="email"
+            name="email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            enterKeyHint="next"
+            className={inputClass}
+            placeholder="jane@example.com"
+          />
         </div>
       </div>
 
@@ -133,15 +342,33 @@ export default function WebForm() {
           name="video_url"
           type="text"
           required
+          inputMode="url"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="next"
           className={inputClass}
-          placeholder="YouTube, Vimeo, Dropbox — paste your link any way you like"
+          placeholder="Paste your link here"
         />
+        <p className="mt-1.5 text-xs text-[#555]">
+          YouTube, Vimeo, Instagram, Google Drive, Dropbox — any link that plays.
+        </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-5 sm:grid-cols-2">
         <div>
           <label htmlFor="instagram" className={labelClass}>Instagram</label>
-          <input id="instagram" name="instagram" className={inputClass} placeholder="@yourhandle" />
+          <input
+            id="instagram"
+            name="instagram"
+            inputMode="text"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            enterKeyHint="next"
+            className={inputClass}
+            placeholder="@yourhandle"
+          />
         </div>
         <div>
           <label htmlFor="location" className={labelClass}>Where are you located?</label>
@@ -149,6 +376,8 @@ export default function WebForm() {
             id="location"
             name="location"
             autoComplete="address-level2"
+            autoCapitalize="words"
+            enterKeyHint="done"
             maxLength={100}
             className={inputClass}
             placeholder="e.g. Glasgow"
@@ -156,48 +385,20 @@ export default function WebForm() {
         </div>
       </div>
 
-      <div>
-        <label className={labelClass}>Available dates — August</label>
-        <div className="mt-2 grid grid-cols-7 gap-1.5" role="group" aria-label="Available dates in August">
-          {AUG_DATES.map((d) => (
-            <label key={d} className="cursor-pointer">
-              <input
-                type="checkbox"
-                name="availability"
-                value={`Aug ${d}`}
-                className="peer sr-only"
-              />
-              <span className="flex h-9 w-full select-none items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] text-xs font-semibold text-[#555] transition peer-checked:border-[#DC143C] peer-checked:bg-[#DC143C]/15 peer-checked:text-white">
-                {d}
-              </span>
-            </label>
-          ))}
-        </div>
-      </div>
+      <AvailabilityPicker />
 
-      <div>
-        <label htmlFor="headshot" className={labelClass}>
-          Headshot <span className="normal-case font-normal text-[#444]">(optional)</span>
-        </label>
-        <input
-          id="headshot"
-          name="headshot"
-          type="file"
-          accept="image/*"
-          className="w-full text-xs text-[#555] file:mr-3 file:cursor-pointer file:rounded file:border-0 file:bg-[#1a1a1a] file:px-3 file:py-1.5 file:text-xs file:text-white hover:file:bg-[#2a2a2a]"
-        />
-      </div>
+      <HeadshotField />
 
       <button
         type="submit"
         disabled={isPending}
-        className="w-full rounded-xl bg-[#DC143C] py-3.5 text-sm font-extrabold uppercase tracking-widest text-white transition hover:bg-[#b01030] disabled:cursor-not-allowed disabled:opacity-50"
+        className="min-h-14 w-full rounded-xl bg-[#DC143C] py-4 text-sm font-extrabold uppercase tracking-widest text-white transition hover:bg-[#b01030] active:bg-[#b01030] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {isPending ? 'Sending…' : 'Apply Now →'}
       </button>
 
-      <p className="text-center text-[10px] text-[#444]">
-        Stand-up sets only · We watch every submission
+      <p className="text-center text-[11px] leading-relaxed text-[#444]">
+        Only name and video link are required · Stand-up sets only · We watch every submission
       </p>
     </form>
   );

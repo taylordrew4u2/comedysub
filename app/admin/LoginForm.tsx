@@ -9,7 +9,7 @@ export default function LoginForm() {
   const [state, formAction, isPending] = useActionState(adminLogin, initial);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-[#0a0a0a] px-4">
+    <div className="px-safe flex min-h-dvh items-center justify-center py-10 bg-[#0a0a0a]">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-extrabold text-white">
@@ -20,7 +20,7 @@ export default function LoginForm() {
 
         <form
           action={formAction}
-          className="rounded-2xl border border-[#1e1e1e] bg-[#111] p-8"
+          className="rounded-2xl border border-[#1e1e1e] bg-[#111] p-6 sm:p-8"
         >
           {state.error && (
             <div className="mb-5 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-400">
@@ -28,22 +28,28 @@ export default function LoginForm() {
             </div>
           )}
 
-          <label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-[#888]">
+          <label
+            htmlFor="admin-password"
+            className="mb-1 block text-xs font-semibold uppercase tracking-wider text-[#888]"
+          >
             Password
           </label>
           <input
+            id="admin-password"
             name="password"
             type="password"
             required
             autoFocus
-            className="mb-5 w-full rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-2.5 text-sm text-white placeholder:text-[#555] focus:border-[#DC143C] focus:outline-none focus:ring-1 focus:ring-[#DC143C]"
+            autoComplete="current-password"
+            enterKeyHint="go"
+            className="mb-5 min-h-12 w-full rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-3.5 py-3 text-base text-white placeholder:text-[#555] focus:border-[#DC143C] focus:outline-none focus:ring-1 focus:ring-[#DC143C] sm:text-sm"
             placeholder="Enter admin password"
           />
 
           <button
             type="submit"
             disabled={isPending}
-            className="w-full rounded-xl bg-[#DC143C] py-3 text-sm font-bold text-white transition hover:bg-[#b01030] disabled:cursor-not-allowed disabled:opacity-60"
+            className="min-h-12 w-full rounded-xl bg-[#DC143C] py-3 text-sm font-bold text-white transition hover:bg-[#b01030] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isPending ? 'Signing in…' : 'Sign In'}
           </button>
