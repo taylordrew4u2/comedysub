@@ -234,10 +234,7 @@ function AvailabilityPicker({
 function TattooField() {
   return (
     <div>
-      <label className={labelClass}>Do you have any tattoos?</label>
-      <p className="mb-2.5 text-xs text-[#555]">
-        Purely curiosity — it won&apos;t affect whether you&apos;re booked.
-      </p>
+      <label className={`${labelClass} mb-2.5`}>Do you have any tattoos?</label>
       <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Do you have any tattoos?">
         {[
           { value: 'yes', label: 'Yes' },
