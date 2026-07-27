@@ -126,3 +126,9 @@ export async function updateSubmission(
     UPDATE submissions SET status = ${status}, admin_notes = ${admin_notes} WHERE id = ${id}
   `;
 }
+
+/** Returns the deleted row so the caller can clean up its headshot blob. */
+export async function deleteSubmission(id: number): Promise<Submission | null> {
+  const { rows } = await sql`DELETE FROM submissions WHERE id = ${id} RETURNING *`;
+  return (rows[0] as unknown as Submission) ?? null;
+}
