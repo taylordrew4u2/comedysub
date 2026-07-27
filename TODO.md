@@ -17,10 +17,12 @@
 - [x] Ask about doing multiple shows when more than one date is offered
 - [x] Export the booked lineup as a PDF from the admin dashboard
 - [x] Admin polish — sort order, "/" to search, denser desktop table, notes no longer lost when a save fails
+- [x] Write and store reusable email templates in the admin (`/admin/templates`)
 
 ## Up Next
 - [ ] Send confirmation email to comedian on submission
 - [ ] Add email notifications to admin on new submission
+- [ ] Pick a template straight from a submission row, instead of via the templates page
 
 ## Ideas / Future
 - [ ] Server-side pagination for very large submission sets
