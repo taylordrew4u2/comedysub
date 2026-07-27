@@ -26,7 +26,12 @@ const DRAFT_FIELDS = [
   'questions',
 ] as const;
 
-type Draft = { fields: Record<string, string>; availability: number[] };
+type YesNo = 'yes' | 'no' | null;
+type Draft = {
+  fields: Record<string, string>;
+  availability: number[];
+  multipleShows: YesNo;
+};
 
 /*
  * The draft covers text inputs, the questions textarea and the tattoo radio
@@ -54,6 +59,10 @@ function readDraft(): Draft | null {
     return {
       fields: parsed.fields ?? {},
       availability: Array.isArray(parsed.availability) ? parsed.availability : [],
+      multipleShows:
+        parsed.multipleShows === 'yes' || parsed.multipleShows === 'no'
+          ? parsed.multipleShows
+          : null,
     };
   } catch {
     // Private browsing, disabled storage, or corrupt JSON — drafts are a bonus.
@@ -176,7 +185,7 @@ function AvailabilityPicker({
   return (
     <div>
       <div className="mb-1.5 flex items-center justify-between gap-3">
-        <span className={`${labelClass} mb-0`}>Available dates</span>
+        <span className={`${labelClass} mb-0`}>Available dates *</span>
         {/* -my-2 py-2 keeps the tap target ~44px tall without adding visible height. */}
         <div className="-my-2 flex shrink-0 items-center gap-3">
           {selected.length > 0 && (
@@ -218,6 +227,8 @@ function AvailabilityPicker({
               value={`Aug ${d}`}
               checked={selected.includes(d)}
               onChange={() => toggle(d)}
+              /* Native "pick at least one": every box is required until one is ticked. */
+              required={selected.length === 0}
               className="peer sr-only"
             />
             <span className="flex h-12 w-full select-none flex-col items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] text-sm font-semibold text-[#555] transition peer-checked:border-[#DC143C] peer-checked:bg-[#DC143C]/15 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-[#DC143C]">
@@ -234,7 +245,7 @@ function AvailabilityPicker({
 function TattooField() {
   return (
     <div>
-      <label className={`${labelClass} mb-2.5`}>Do you have any tattoos?</label>
+      <label className={`${labelClass} mb-2.5`}>Do you have any tattoos? *</label>
       <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Do you have any tattoos?">
         {[
           { value: 'yes', label: 'Yes' },
@@ -245,9 +256,59 @@ function TattooField() {
               type="radio"
               name="has_tattoos"
               value={option.value}
+              required
               className="peer sr-only"
             />
             <span className="flex h-12 w-full select-none items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] text-sm font-semibold text-[#555] transition peer-checked:border-[#DC143C] peer-checked:bg-[#DC143C]/15 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-[#DC143C]">
+              {option.label}
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Only worth asking once someone has offered more than one night, so it appears
+ * with the second date and disappears again if they drop back to one. Controlled
+ * state rather than an uncontrolled input, so restoring a draft doesn't race the
+ * re-render that mounts it.
+ */
+function MultipleShowsField({
+  dateCount,
+  value,
+  onChange,
+}: {
+  dateCount: number;
+  value: YesNo;
+  onChange: (next: YesNo) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] p-4">
+      <label className={`${labelClass} mb-2.5`}>
+        You&apos;re free on {dateCount} nights — want more than one show? *
+      </label>
+      <div
+        className="grid grid-cols-2 gap-2"
+        role="radiogroup"
+        aria-label="Would you like to perform multiple shows?"
+      >
+        {[
+          { value: 'yes' as const, label: 'Yes please' },
+          { value: 'no' as const, label: 'Just one' },
+        ].map((option) => (
+          <label key={option.value} className="cursor-pointer">
+            <input
+              type="radio"
+              name="multiple_shows"
+              value={option.value}
+              checked={value === option.value}
+              onChange={() => onChange(option.value)}
+              required
+              className="peer sr-only"
+            />
+            <span className="flex h-12 w-full select-none items-center justify-center rounded-lg border border-[#2a2a2a] bg-[#111] text-sm font-semibold text-[#555] transition peer-checked:border-[#DC143C] peer-checked:bg-[#DC143C]/15 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-[#DC143C]">
               {option.label}
             </span>
           </label>
@@ -323,9 +384,7 @@ function HeadshotField() {
 
   return (
     <div>
-      <label htmlFor="headshot" className={labelClass}>
-        Headshot <span className="normal-case font-normal text-[#444]">(optional)</span>
-      </label>
+      <label htmlFor="headshot" className={labelClass}>Headshot *</label>
 
       <input
         ref={inputRef}
@@ -333,6 +392,7 @@ function HeadshotField() {
         name="headshot"
         type="file"
         accept="image/*"
+        required={!fileName}
         onChange={handleChange}
         className="sr-only"
       />
@@ -373,6 +433,7 @@ export default function WebForm() {
   const [state, formAction, isPending] = useActionState(submitWebForm, initial);
   const [agreement, setAgreement] = useState<'agreed' | 'declined' | null>(null);
   const [availability, setAvailability] = useState<number[]>([]);
+  const [multipleShows, setMultipleShows] = useState<YesNo>(null);
   const [draftRestored, setDraftRestored] = useState(false);
   const topRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
@@ -408,6 +469,10 @@ export default function WebForm() {
       setAvailability(days);
       restoredSomething = true;
     }
+    if (days.length > 1 && draft.multipleShows) {
+      setMultipleShows(draft.multipleShows);
+      restoredSomething = true;
+    }
 
     if (restoredSomething) setDraftRestored(true);
   }, []);
@@ -425,15 +490,18 @@ export default function WebForm() {
     }
 
     try {
-      if (!Object.keys(fields).length && !availability.length) {
+      if (!Object.keys(fields).length && !availability.length && !multipleShows) {
         localStorage.removeItem(DRAFT_KEY);
       } else {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify({ fields, availability }));
+        localStorage.setItem(
+          DRAFT_KEY,
+          JSON.stringify({ fields, availability, multipleShows }),
+        );
       }
     } catch {
       /* storage unavailable — the form still works, it just won't persist */
     }
-  }, [availability]);
+  }, [availability, multipleShows]);
 
   useEffect(() => {
     saveDraft();
@@ -443,6 +511,7 @@ export default function WebForm() {
     clearDraft();
     formRef.current?.reset();
     setAvailability([]);
+    setMultipleShows(null);
     setDraftRestored(false);
   }
 
@@ -527,11 +596,12 @@ export default function WebForm() {
           />
         </div>
         <div>
-          <label htmlFor="email" className={labelClass}>Email</label>
+          <label htmlFor="email" className={labelClass}>Email *</label>
           <input
             id="email"
             name="email"
             type="email"
+            required
             inputMode="email"
             autoComplete="email"
             autoCapitalize="none"
@@ -566,10 +636,11 @@ export default function WebForm() {
 
       <div className="grid gap-5 sm:grid-cols-2">
         <div>
-          <label htmlFor="instagram" className={labelClass}>Instagram</label>
+          <label htmlFor="instagram" className={labelClass}>Instagram *</label>
           <input
             id="instagram"
             name="instagram"
+            required
             inputMode="text"
             autoCapitalize="none"
             autoCorrect="off"
@@ -580,10 +651,11 @@ export default function WebForm() {
           />
         </div>
         <div>
-          <label htmlFor="location" className={labelClass}>Where are you located?</label>
+          <label htmlFor="location" className={labelClass}>Where are you located? *</label>
           <input
             id="location"
             name="location"
+            required
             autoComplete="address-level2"
             autoCapitalize="words"
             enterKeyHint="done"
@@ -595,6 +667,14 @@ export default function WebForm() {
       </div>
 
       <AvailabilityPicker selected={availability} setSelected={setAvailability} />
+
+      {availability.length > 1 && (
+        <MultipleShowsField
+          dateCount={availability.length}
+          value={multipleShows}
+          onChange={setMultipleShows}
+        />
+      )}
 
       <TattooField />
 
@@ -611,7 +691,7 @@ export default function WebForm() {
       </button>
 
       <p className="text-center text-[11px] leading-relaxed text-[#444]">
-        Only name and video link are required · Stand-up sets only · We watch every submission
+        All fields required except questions · Stand-up sets only · We watch every submission
       </p>
     </form>
   );

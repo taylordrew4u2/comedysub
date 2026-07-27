@@ -13,6 +13,9 @@
 - [x] Keep a local draft of the submission form so leaving the page doesn't lose it
 - [x] Let admin delete submissions (with confirmation)
 - [x] Ask submitters whether they have tattoos, and let them ask questions
+- [x] Make every field required except questions
+- [x] Ask about doing multiple shows when more than one date is offered
+- [x] Export the booked lineup as a PDF from the admin dashboard
 
 ## Up Next
 - [ ] Send confirmation email to comedian on submission

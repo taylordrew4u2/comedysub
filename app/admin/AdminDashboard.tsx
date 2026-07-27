@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useActionState, useMemo, useRef } from 'react';
 import {
   adminLogout,
@@ -260,6 +261,11 @@ function SubmissionCard({ sub }: { sub: Submission }) {
             No tattoos
           </span>
         )}
+        {sub.multiple_shows === true && (
+          <span className="rounded bg-[#DC143C]/20 px-2 py-0.5 text-[10px] font-bold uppercase text-[#f08ba0]">
+            Wants multiple shows
+          </span>
+        )}
         {sub.availability
           ? sub.availability.split(', ').map((d) => (
               <span key={d} className="rounded bg-[#1e1e1e] px-1.5 py-0.5 text-[10px] text-[#888]">
@@ -355,6 +361,13 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
             <span className="text-sm font-bold text-[#DC143C]">Pins &amp; Needles</span>
             <span className="ml-2 hidden text-xs text-[#555] sm:inline">Admin Dashboard</span>
           </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Link
+              href="/admin/lineup"
+              className="flex min-h-11 items-center rounded-lg border border-[#2a2a2a] px-3 text-xs text-[#888] transition hover:border-[#DC143C] hover:text-white sm:min-h-0 sm:py-1.5"
+            >
+              Export booked
+            </Link>
           <form action={adminLogout}>
             <button
               type="submit"
@@ -363,6 +376,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
               Logout
             </button>
           </form>
+          </div>
         </div>
       </header>
 
@@ -427,7 +441,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
 
               {/* Table — desktop only, where 1080px actually fits */}
               <div className="hidden overflow-x-auto rounded-xl border border-[#1e1e1e] lg:block">
-                <table className="w-full min-w-[1320px] text-sm">
+                <table className="w-full min-w-[1420px] text-sm">
                   <thead>
                     <tr className="border-b border-[#1e1e1e] bg-[#111] text-left text-[10px] font-semibold uppercase tracking-wider text-[#555]">
                       <th className="px-4 py-3 w-10">#</th>
@@ -439,6 +453,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                       <th className="px-4 py-3">Tattoos</th>
                       <th className="px-4 py-3">Questions</th>
                       <th className="px-4 py-3">Availability</th>
+                      <th className="px-4 py-3">Multi</th>
                       <th className="px-4 py-3">Video</th>
                       <th className="px-4 py-3">Headshot</th>
                       <th className="px-4 py-3">Submitted</th>
@@ -544,6 +559,19 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                                 </span>
                               ))}
                             </div>
+                          ) : (
+                            <span className="text-[#333] text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {sub.multiple_shows === true ? (
+                            <span className="rounded bg-[#DC143C]/20 px-2 py-0.5 text-[10px] font-bold uppercase text-[#f08ba0]">
+                              Yes
+                            </span>
+                          ) : sub.multiple_shows === false ? (
+                            <span className="rounded bg-[#1e1e1e] px-2 py-0.5 text-[10px] font-bold uppercase text-[#777]">
+                              No
+                            </span>
                           ) : (
                             <span className="text-[#333] text-xs">—</span>
                           )}

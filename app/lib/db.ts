@@ -21,6 +21,7 @@ export interface Submission {
   admin_notes: string | null;
   agreed_bring_two: boolean | null;
   has_tattoos: boolean | null;
+  multiple_shows: boolean | null;
   questions: string | null;
   submitted_at: string;
 }
@@ -42,6 +43,7 @@ async function ensureTable(): Promise<void> {
       admin_notes   TEXT,
       agreed_bring_two BOOLEAN,
       has_tattoos   BOOLEAN,
+      multiple_shows BOOLEAN,
       questions     TEXT,
       submitted_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
@@ -52,6 +54,7 @@ async function ensureTable(): Promise<void> {
   await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS agreed_bring_two BOOLEAN`;
   await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS has_tattoos BOOLEAN`;
   await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS questions TEXT`;
+  await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS multiple_shows BOOLEAN`;
 }
 
 export async function insertSubmission(data: {
@@ -63,6 +66,7 @@ export async function insertSubmission(data: {
   video_url: string | null;
   headshot_url: string | null;
   has_tattoos: boolean | null;
+  multiple_shows: boolean | null;
   questions: string | null;
   source: 'web';
 }): Promise<{ id: number }> {
@@ -70,11 +74,11 @@ export async function insertSubmission(data: {
   const { rows } = await sql`
     INSERT INTO submissions
       (name, email, instagram, location, availability, video_url, headshot_url,
-       has_tattoos, questions, source)
+       has_tattoos, multiple_shows, questions, source)
     VALUES
       (${data.name}, ${data.email}, ${data.instagram}, ${data.location},
        ${data.availability}, ${data.video_url}, ${data.headshot_url},
-       ${data.has_tattoos}, ${data.questions}, ${data.source})
+       ${data.has_tattoos}, ${data.multiple_shows}, ${data.questions}, ${data.source})
     RETURNING id
   `;
   return rows[0] as { id: number };
