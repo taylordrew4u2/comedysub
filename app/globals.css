@@ -67,6 +67,24 @@ select,
   padding-right: max(1rem, var(--safe-right));
 }
 
+/*
+ * The app is dark everywhere, which is wrong on paper. The lineup export forces
+ * itself light and drops its toolbar so Save-as-PDF yields a clean document.
+ */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body,
+  .lineup {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  @page {
+    margin: 14mm;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

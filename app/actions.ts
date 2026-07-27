@@ -35,13 +35,46 @@ export async function submitWebForm(
   const availability = formData.getAll('availability').join(', ') || '';
   const questions = (formData.get('questions') as string)?.trim().slice(0, 1000) || null;
 
-  // Optional, so "unanswered" stays distinct from "no".
   const tattooAnswer = formData.get('has_tattoos');
   const has_tattoos =
     tattooAnswer === 'yes' ? true : tattooAnswer === 'no' ? false : null;
 
-  if (!name || !video_url) {
-    return { error: 'Please fill in your name and video link.' };
+  // Only asked when more than one date is offered, so only required then.
+  const dateCount = formData.getAll('availability').length;
+  const multiShowAnswer = formData.get('multiple_shows');
+  const multiple_shows =
+    multiShowAnswer === 'yes' ? true : multiShowAnswer === 'no' ? false : null;
+
+  /*
+   * Everything except `questions` is required. The `required` attributes on the
+   * form are a convenience — they're trivially bypassed — so the real check
+   * lives here. The headshot is validated on the file being attached rather
+   * than on the upload succeeding, so the form still works when blob storage
+   * isn't configured.
+   */
+  const missing: string[] = [];
+  if (!name) missing.push('your name');
+  if (!email) missing.push('your email');
+  if (!video_url) missing.push('a video link');
+  if (!instagram) missing.push('your Instagram');
+  if (!location) missing.push('where you’re located');
+  if (!availability) missing.push('at least one available date');
+  if (has_tattoos === null) missing.push('the tattoo question');
+  if (dateCount > 1 && multiple_shows === null) missing.push('whether you want multiple shows');
+  if (!headshotFile || headshotFile.size === 0) missing.push('a headshot');
+
+  if (missing.length) {
+    return {
+      error: `Please add ${
+        missing.length === 1
+          ? missing[0]
+          : `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}`
+      }.`,
+    };
+  }
+
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return { error: 'That email address doesn’t look right — please check it.' };
   }
 
   let headshot_url: string | null = null;
@@ -69,6 +102,7 @@ export async function submitWebForm(
       video_url,
       headshot_url,
       has_tattoos,
+      multiple_shows,
       questions,
       source: 'web',
     });
