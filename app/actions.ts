@@ -3,8 +3,13 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { put } from '@vercel/blob';
-import { insertSubmission, setAgreement, updateSubmission } from './lib/db';
+import { del, put } from '@vercel/blob';
+import {
+  deleteSubmission,
+  insertSubmission,
+  setAgreement,
+  updateSubmission,
+} from './lib/db';
 import { normalizeInstagram, toHttpUrl } from './lib/normalize';
 
 // ── Public Submission ──────────────────────────────────────────────────────────
@@ -144,5 +149,50 @@ export async function updateSubmissionAction(
   } catch (err) {
     console.error('Update error:', err);
     return { error: 'Failed to update submission.' };
+  }
+}
+
+// ── Admin Delete Submission ────────────────────────────────────────────────────
+
+export interface DeleteState {
+  error?: string;
+  success?: boolean;
+}
+
+export async function deleteSubmissionAction(
+  prevState: DeleteState,
+  formData: FormData,
+): Promise<DeleteState> {
+  const cookieStore = await cookies();
+  if (cookieStore.get('admin_auth')?.value !== 'true') {
+    return { error: 'Unauthorized' };
+  }
+
+  const id = parseInt(formData.get('id') as string, 10);
+  if (!Number.isInteger(id)) {
+    return { error: 'Missing submission id.' };
+  }
+
+  try {
+    const removed = await deleteSubmission(id);
+    if (!removed) {
+      return { error: 'That submission no longer exists.' };
+    }
+
+    // Drop the headshot too, or it lingers in blob storage with no row pointing
+    // at it. Non-fatal: the submission is already gone either way.
+    if (removed.headshot_url && process.env.BLOB_READ_WRITE_TOKEN) {
+      try {
+        await del(removed.headshot_url);
+      } catch (err) {
+        console.error('Headshot cleanup failed:', err);
+      }
+    }
+
+    revalidatePath('/admin');
+    return { success: true };
+  } catch (err) {
+    console.error('Delete error:', err);
+    return { error: 'Failed to delete submission.' };
   }
 }

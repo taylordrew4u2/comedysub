@@ -1,7 +1,13 @@
 'use client';
 
 import { useState, useActionState, useMemo, useRef } from 'react';
-import { adminLogout, updateSubmissionAction, type UpdateState } from '../actions';
+import {
+  adminLogout,
+  deleteSubmissionAction,
+  updateSubmissionAction,
+  type DeleteState,
+  type UpdateState,
+} from '../actions';
 import type { Submission, SubmissionStatus } from '../lib/db';
 import { instagramUrl, normalizeInstagram, toHttpUrl } from '../lib/normalize';
 
@@ -40,6 +46,59 @@ function StatusBadge({ status }: { status: string }) {
     >
       {status}
     </span>
+  );
+}
+
+/**
+ * Deleting is permanent, so it takes two taps: the first swaps in an explicit
+ * confirmation rather than firing straight away. Kept in its own form because
+ * it can't nest inside the update form beside it.
+ */
+function DeleteForm({ sub }: { sub: Submission }) {
+  const initial: DeleteState = {};
+  const [state, formAction, isPending] = useActionState(deleteSubmissionAction, initial);
+  const [confirming, setConfirming] = useState(false);
+
+  if (!confirming) {
+    return (
+      <div className="flex flex-col gap-1">
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          className="min-h-11 rounded border border-[#2a2a2a] px-3 py-1 text-xs font-semibold text-[#666] transition hover:border-red-500/60 hover:text-red-400 lg:min-h-0"
+        >
+          Delete
+        </button>
+        {state.error && <p className="text-[10px] text-red-400">{state.error}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <form action={formAction} className="flex flex-col gap-2 rounded border border-red-500/40 bg-red-500/10 p-2">
+      <input type="hidden" name="id" value={sub.id} />
+      <p className="text-[11px] leading-snug text-red-300">
+        Delete {sub.name}&apos;s submission? This can&apos;t be undone.
+      </p>
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="min-h-11 flex-1 rounded bg-red-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-red-700 disabled:opacity-50 lg:min-h-0"
+        >
+          {isPending ? 'Deleting…' : 'Yes, delete'}
+        </button>
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={() => setConfirming(false)}
+          className="min-h-11 flex-1 rounded border border-[#2a2a2a] px-3 py-1 text-xs font-semibold text-[#888] transition hover:text-white disabled:opacity-50 lg:min-h-0"
+        >
+          Cancel
+        </button>
+      </div>
+      {state.error && <p className="text-[10px] text-red-400">{state.error}</p>}
+    </form>
   );
 }
 
@@ -209,8 +268,9 @@ function SubmissionCard({ sub }: { sub: Submission }) {
           </span>
           <span className="text-[#555] transition group-open:rotate-180" aria-hidden="true">▾</span>
         </summary>
-        <div className="pt-2">
+        <div className="flex flex-col gap-2 pt-2">
           <RowForm sub={sub} />
+          <DeleteForm sub={sub} />
         </div>
       </details>
     </div>
@@ -478,7 +538,10 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                           <div className="mb-2">
                             <StatusBadge status={sub.status} />
                           </div>
-                          <RowForm sub={sub} />
+                          <div className="flex flex-col gap-2">
+                            <RowForm sub={sub} />
+                            <DeleteForm sub={sub} />
+                          </div>
                         </td>
                       </tr>
                     ))}
