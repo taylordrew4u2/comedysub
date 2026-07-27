@@ -12,6 +12,7 @@
 - [x] Normalise pasted video/Instagram links so admin links aren't broken
 - [x] Keep a local draft of the submission form so leaving the page doesn't lose it
 - [x] Let admin delete submissions (with confirmation)
+- [x] Ask submitters whether they have tattoos, and let them ask questions
 
 ## Up Next
 - [ ] Send confirmation email to comedian on submission

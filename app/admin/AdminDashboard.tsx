@@ -250,6 +250,16 @@ function SubmissionCard({ sub }: { sub: Submission }) {
             ✗ Declined +2
           </span>
         )}
+        {sub.has_tattoos === true && (
+          <span className="rounded bg-[#DC143C]/20 px-2 py-0.5 text-[10px] font-bold uppercase text-[#f08ba0]">
+            Tattooed
+          </span>
+        )}
+        {sub.has_tattoos === false && (
+          <span className="rounded bg-[#1e1e1e] px-2 py-0.5 text-[10px] font-bold uppercase text-[#777]">
+            No tattoos
+          </span>
+        )}
         {sub.availability
           ? sub.availability.split(', ').map((d) => (
               <span key={d} className="rounded bg-[#1e1e1e] px-1.5 py-0.5 text-[10px] text-[#888]">
@@ -258,6 +268,17 @@ function SubmissionCard({ sub }: { sub: Submission }) {
             ))
           : null}
       </div>
+
+      {sub.questions && (
+        <div className="mt-3 rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] p-3">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-[#DC143C]">
+            Asked a question
+          </p>
+          <p className="text-xs leading-relaxed break-words whitespace-pre-wrap text-[#bbb]">
+            {sub.questions}
+          </p>
+        </div>
+      )}
 
       {/* Editing is collapsed by default so the list stays scannable on a phone. */}
       <details className="group mt-3 border-t border-[#1a1a1a] pt-3">
@@ -296,7 +317,8 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
           (s.email ?? '').toLowerCase().includes(q) ||
           (s.instagram ?? '').toLowerCase().includes(q) ||
           (s.location ?? '').toLowerCase().includes(q) ||
-          (s.admin_notes ?? '').toLowerCase().includes(q),
+          (s.admin_notes ?? '').toLowerCase().includes(q) ||
+          (s.questions ?? '').toLowerCase().includes(q),
       );
     }
     return items;
@@ -371,7 +393,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
             type="search"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Search name, email, location, notes…"
+            placeholder="Search name, email, notes, questions…"
             aria-label="Search submissions"
             autoCapitalize="none"
             autoCorrect="off"
@@ -405,7 +427,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
 
               {/* Table — desktop only, where 1080px actually fits */}
               <div className="hidden overflow-x-auto rounded-xl border border-[#1e1e1e] lg:block">
-                <table className="w-full min-w-[1080px] text-sm">
+                <table className="w-full min-w-[1320px] text-sm">
                   <thead>
                     <tr className="border-b border-[#1e1e1e] bg-[#111] text-left text-[10px] font-semibold uppercase tracking-wider text-[#555]">
                       <th className="px-4 py-3 w-10">#</th>
@@ -414,6 +436,8 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                       <th className="px-4 py-3">Instagram</th>
                       <th className="px-4 py-3">Location</th>
                       <th className="px-4 py-3">Brings +2</th>
+                      <th className="px-4 py-3">Tattoos</th>
+                      <th className="px-4 py-3">Questions</th>
                       <th className="px-4 py-3">Availability</th>
                       <th className="px-4 py-3">Video</th>
                       <th className="px-4 py-3">Headshot</th>
@@ -478,6 +502,31 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                           ) : sub.agreed_bring_two === false ? (
                             <span className="rounded bg-red-500/20 px-2 py-0.5 text-[10px] font-bold uppercase text-red-300">
                               ✗ Declined
+                            </span>
+                          ) : (
+                            <span className="text-[#333] text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {sub.has_tattoos === true ? (
+                            <span className="rounded bg-[#DC143C]/20 px-2 py-0.5 text-[10px] font-bold uppercase text-[#f08ba0]">
+                              Yes
+                            </span>
+                          ) : sub.has_tattoos === false ? (
+                            <span className="rounded bg-[#1e1e1e] px-2 py-0.5 text-[10px] font-bold uppercase text-[#777]">
+                              No
+                            </span>
+                          ) : (
+                            <span className="text-[#333] text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 max-w-[220px]">
+                          {sub.questions ? (
+                            <span
+                              className="block text-xs leading-relaxed text-[#bbb]"
+                              title={sub.questions}
+                            >
+                              {sub.questions}
                             </span>
                           ) : (
                             <span className="text-[#333] text-xs">—</span>
