@@ -651,15 +651,15 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
 
               {/* Table — desktop only, where the full width actually fits */}
               <div className="hidden overflow-x-auto rounded-xl border border-[#1e1e1e] lg:block">
-                <table className="w-full min-w-[1180px] text-sm">
+                <table className="w-full min-w-[1260px] text-sm">
                   <thead>
                     <tr className="border-b border-[#1e1e1e] bg-[#111] text-left text-[10px] font-semibold uppercase tracking-wider text-[#555]">
-                      <th className="px-4 py-3">Comedian</th>
+                      <th className="min-w-[210px] px-4 py-3">Comedian</th>
                       <th className="px-4 py-3">Contact</th>
                       <th className="px-4 py-3">Video</th>
                       <th className="px-4 py-3">Available</th>
                       <th className="px-4 py-3">Answers</th>
-                      <th className="px-4 py-3">Questions</th>
+                      <th className="w-[300px] px-4 py-3">Questions</th>
                       <th className="px-4 py-3">Submitted</th>
                       <th className="w-56 px-4 py-3">Status / Notes</th>
                     </tr>
@@ -753,12 +753,11 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                             <FlagBadges sub={sub} />
                           </td>
 
-                          <td className="max-w-[220px] px-4 py-3">
+                          {/* Never clamped — a half-shown question is one you
+                              have to hover to answer. */}
+                          <td className="w-[300px] min-w-[260px] px-4 py-3">
                             {sub.questions ? (
-                              <span
-                                className="line-clamp-3 text-xs leading-relaxed text-[#bbb]"
-                                title={sub.questions}
-                              >
+                              <span className="block text-xs leading-relaxed break-words whitespace-pre-wrap text-[#bbb]">
                                 {sub.questions}
                               </span>
                             ) : (
