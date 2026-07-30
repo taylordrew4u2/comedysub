@@ -539,6 +539,12 @@ export default function WebForm() {
           <p className="text-sm text-[#666]">
             We&apos;ll be in touch if you&apos;re shortlisted.
           </p>
+          {/* Said here as well as on the form — this is the screen people
+              actually read, and a DM from a stranger lands in Requests. */}
+          <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-[#aaa]">
+            We message on <span className="font-semibold text-white">Instagram</span>, so keep
+            an eye on your DMs — including your message requests.
+          </p>
           {agreement === 'agreed' && (
             <p className="mt-3 text-xs font-semibold text-[#DC143C]">
               ★ Priority noted — thanks for agreeing to bring two people.
@@ -649,6 +655,9 @@ export default function WebForm() {
             className={inputClass}
             placeholder="@yourhandle"
           />
+          <p className="mt-1.5 text-xs text-[#666]">
+            This is how we&apos;ll reach you — keep an eye on your DMs and message requests.
+          </p>
         </div>
         <div>
           <label htmlFor="location" className={labelClass}>Where are you located? *</label>
