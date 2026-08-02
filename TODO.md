@@ -22,6 +22,7 @@
 - [x] Pick which nights a booked comedian is on, and flag dates that already have a comic
 - [x] Admin table fits the screen — no sideways scrolling, one-tap status, notes fold away
 - [x] Hide declined comedians from the working list, behind the Declined card
+- [x] Submission form says what's missing per field, and shrinks big headshots itself
 
 ## Up Next
 - [ ] Send confirmation email to comedian on submission
