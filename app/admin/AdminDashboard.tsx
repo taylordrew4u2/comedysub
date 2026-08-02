@@ -8,11 +8,13 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useTransition,
   type ReactNode,
 } from 'react';
 import {
   adminLogout,
   deleteSubmissionAction,
+  setBookedDatesAction,
   updateSubmissionAction,
   type DeleteState,
   type UpdateState,
@@ -158,15 +160,185 @@ function FlagBadges({ sub }: { sub: Submission }) {
   );
 }
 
-function AvailabilityChips({ value }: { value: string }) {
-  if (!value) return <span className="text-xs text-[#333]">—</span>;
+/* ── Nights ──────────────────────────────────────────────────────────────────
+ *
+ * A booked comedian's `booked_dates` are the nights they're actually on, picked
+ * from the dates they offered. Indexing those across everyone booked lets every
+ * date chip say whether the night already has someone on it — which is a nudge,
+ * not a block: more than one comic a night is normal.
+ */
+
+const NIGHT_CHIP = 'rounded px-1.5 py-0.5 text-[10px] leading-tight whitespace-nowrap';
+const NIGHT_FREE = 'bg-[#1e1e1e] text-[#888]';
+/** Amber: somebody is already on that night. Still bookable, just not empty. */
+const NIGHT_TAKEN = 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30';
+const NIGHT_ON = 'bg-green-500/25 text-green-200 ring-1 ring-green-500/50';
+
+type NightIndex = Map<string, Submission[]>;
+
+function splitDates(value: string | null): string[] {
+  return (value ?? '')
+    .split(',')
+    .map((d) => d.trim())
+    .filter(Boolean);
+}
+
+/** Every night someone is booked on, with who. Only booked rows count — an
+ *  applicant's dates are an offer, and un-booking someone frees their night. */
+function buildNights(submissions: Submission[]): NightIndex {
+  const nights: NightIndex = new Map();
+  submissions.forEach((sub) => {
+    if (sub.status !== 'booked') return;
+    splitDates(sub.booked_dates).forEach((date) => {
+      const on = nights.get(date);
+      if (on) on.push(sub);
+      else nights.set(date, [sub]);
+    });
+  });
+  return nights;
+}
+
+/** "Aug 6" sorts before "Aug 13" — by the day, not by the string. */
+function byNight(a: string, b: string): number {
+  const dayA = parseInt(a.replace(/\D+/g, ''), 10);
+  const dayB = parseInt(b.replace(/\D+/g, ''), 10);
+  if (Number.isNaN(dayA) || Number.isNaN(dayB) || dayA === dayB) return a.localeCompare(b);
+  return dayA - dayB;
+}
+
+/** Who else is on that night — a comedian isn't a clash with themselves. */
+function othersOn(nights: NightIndex, date: string, exceptId: number): Submission[] {
+  return (nights.get(date) ?? []).filter((s) => s.id !== exceptId);
+}
+
+function nightTitle(date: string, others: Submission[]): string | undefined {
+  if (!others.length) return undefined;
+  return `${date}: ${others.map((s) => s.name).join(', ')} already booked`;
+}
+
+/** Read-only dates — what an applicant offered, coloured by what's taken. */
+function AvailabilityChips({ sub, nights }: { sub: Submission; nights: NightIndex }) {
+  const dates = splitDates(sub.availability);
+  if (!dates.length) return <span className="text-xs text-[#333]">—</span>;
+
   return (
     <div className="flex flex-wrap gap-1">
-      {value.split(', ').map((d) => (
-        <span key={d} className="rounded bg-[#1e1e1e] px-1.5 py-0.5 text-[10px] text-[#888]">
-          {d}
-        </span>
-      ))}
+      {dates.map((d) => {
+        const others = othersOn(nights, d, sub.id);
+        return (
+          <span
+            key={d}
+            title={nightTitle(d, others)}
+            className={`${NIGHT_CHIP} ${others.length ? NIGHT_TAKEN : NIGHT_FREE}`}
+          >
+            {d}
+            {others.length ? ` · ${others.length}` : ''}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * The same dates, tappable, for someone who's already booked — tap the nights
+ * they're on. Saves per tap straight to the server action rather than through a
+ * form, and holds the selection locally so the chip responds before the round
+ * trip; a rejected save puts it back and says why.
+ */
+function BookedNightPicker({ sub, nights }: { sub: Submission; nights: NightIndex }) {
+  const dates = useMemo(() => splitDates(sub.availability), [sub.availability]);
+  const [selected, setSelected] = useState<string[]>(() => splitDates(sub.booked_dates));
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function toggle(date: string) {
+    const wanted = new Set(selected);
+    if (!wanted.delete(date)) wanted.add(date);
+    // Rebuilt from `dates` so the stored order always matches the offer order.
+    const next = dates.filter((d) => wanted.has(d));
+    const previous = selected;
+
+    setSelected(next);
+    setError(null);
+    startTransition(async () => {
+      const result = await setBookedDatesAction(sub.id, next);
+      if (result.error) {
+        setError(result.error);
+        setSelected(previous);
+      } else if (result.dates) {
+        setSelected(result.dates);
+      }
+    });
+  }
+
+  if (!dates.length) {
+    return <span className="text-xs text-[#333]">No dates given</span>;
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap gap-1">
+        {dates.map((d) => {
+          const on = selected.includes(d);
+          const others = othersOn(nights, d, sub.id);
+          return (
+            <button
+              key={d}
+              type="button"
+              aria-pressed={on}
+              disabled={isPending}
+              onClick={() => toggle(d)}
+              title={nightTitle(d, others)}
+              className={`${NIGHT_CHIP} flex min-h-11 items-center px-2.5 transition hover:ring-1 hover:ring-[#DC143C] disabled:opacity-60 lg:min-h-7 ${
+                on ? NIGHT_ON : others.length ? NIGHT_TAKEN : NIGHT_FREE
+              }`}
+            >
+              {on ? '✓ ' : ''}
+              {d}
+              {others.length ? ` · ${others.length}` : ''}
+            </button>
+          );
+        })}
+      </div>
+      <p
+        role="status"
+        aria-live="polite"
+        className={`text-[10px] leading-snug ${error ? 'text-red-400' : 'text-[#666]'}`}
+      >
+        {error ??
+          (selected.length
+            ? `On ${selected.length} night${selected.length === 1 ? '' : 's'}`
+            : 'Tap the nights they’re booked for')}
+      </p>
+    </div>
+  );
+}
+
+/** Which nights already have someone on them, above both lists. */
+function NightsBar({ nights }: { nights: NightIndex }) {
+  const booked = [...nights.entries()].sort((a, b) => byNight(a[0], b[0]));
+  if (!booked.length) return null;
+
+  return (
+    <div className="mb-6 rounded-xl border border-[#1e1e1e] bg-[#111] px-4 py-3">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[#555]">
+        Nights with a comic on
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {booked.map(([date, subs]) => (
+          <span
+            key={date}
+            title={subs.map((s) => s.name).join(', ')}
+            className={`${NIGHT_CHIP} ${NIGHT_TAKEN} px-2 py-1`}
+          >
+            {date} · {subs.length}
+          </span>
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] leading-snug text-[#666]">
+        Amber marks a night that already has someone on it — still open, just no longer empty.
+      </p>
     </div>
   );
 }
@@ -325,9 +497,11 @@ function RowForm({
 /* Mobile/tablet view — a tappable card per submission instead of a wide table. */
 function SubmissionCard({
   sub,
+  nights,
   onStatusSaved,
 }: {
   sub: Submission;
+  nights: NightIndex;
   onStatusSaved?: (sub: Submission, status: SubmissionStatus) => void;
 }) {
   // Normalised at render so rows saved before normalisation existed link correctly.
@@ -402,8 +576,18 @@ function SubmissionCard({
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
         <FlagBadges sub={sub} />
-        {sub.availability ? <AvailabilityChips value={sub.availability} /> : null}
+        {sub.status !== 'booked' && <AvailabilityChips sub={sub} nights={nights} />}
       </div>
+
+      {/* Booked comedians get the picker instead — same dates, tap to set. */}
+      {sub.status === 'booked' && (
+        <div className="mt-3 rounded-lg border border-[#1e1e1e] bg-[#0a0a0a] p-3">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[#555]">
+            Nights they’re on
+          </p>
+          <BookedNightPicker sub={sub} nights={nights} />
+        </div>
+      )}
 
       {sub.questions && (
         <div className="mt-3 rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] p-3">
@@ -489,6 +673,9 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
   }, [submissions]);
 
   const scoped = byTab[tab];
+
+  /* Built from every booked comedian, so both tabs colour dates the same way. */
+  const nights = useMemo(() => buildNights(submissions), [submissions]);
 
   /* Search next, so the stat cards can count within the current search. */
   const query = search.trim().toLowerCase();
@@ -712,6 +899,8 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
           </div>
         )}
 
+        <NightsBar nights={nights} />
+
         {/* ── Search / sort ── */}
         <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
           <div className="relative w-full sm:max-w-md">
@@ -831,13 +1020,18 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
               {/* Cards — phones and tablets */}
               <div className="flex flex-col gap-3 lg:hidden">
                 {paginated.map((sub) => (
-                  <SubmissionCard key={sub.id} sub={sub} onStatusSaved={handleStatusSaved} />
+                  <SubmissionCard
+                    key={sub.id}
+                    sub={sub}
+                    nights={nights}
+                    onStatusSaved={handleStatusSaved}
+                  />
                 ))}
               </div>
 
               {/* Table — desktop only, where the full width actually fits */}
               <div className="hidden overflow-x-auto rounded-xl border border-[#1e1e1e] lg:block">
-                <table className="w-full min-w-[1260px] text-sm">
+                <table className="w-full min-w-[1300px] text-sm">
                   <thead>
                     <tr className="border-b border-[#1e1e1e] bg-[#111] text-left text-[10px] font-semibold uppercase tracking-wider text-[#555]">
                       <th className="min-w-[210px] px-4 py-3">Comedian</th>
@@ -931,8 +1125,12 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                             )}
                           </td>
 
-                          <td className="max-w-[150px] px-4 py-3">
-                            <AvailabilityChips value={sub.availability} />
+                          <td className="w-[230px] px-4 py-3">
+                            {sub.status === 'booked' ? (
+                              <BookedNightPicker sub={sub} nights={nights} />
+                            ) : (
+                              <AvailabilityChips sub={sub} nights={nights} />
+                            )}
                           </td>
 
                           <td className="max-w-[140px] px-4 py-3">

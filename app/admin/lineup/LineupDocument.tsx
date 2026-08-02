@@ -87,6 +87,9 @@ export default function LineupDocument({
                           href={igHref}
                         />
                         <Row label="Location" value={sub.location} />
+                        {/* The nights they're on come before the nights they
+                            offered — it's the one the door staff needs. */}
+                        <Row label="On" value={sub.booked_dates || null} />
                         <Row label="Available" value={sub.availability || null} />
                         <Row
                           label="Tattoos"

@@ -7,9 +7,11 @@ import { del, put } from '@vercel/blob';
 import {
   deleteSubmission,
   deleteTemplate,
+  getSubmission,
   insertSubmission,
   insertTemplate,
   setAgreement,
+  setBookedDates,
   updateSubmission,
   updateTemplate,
 } from './lib/db';
@@ -194,6 +196,59 @@ export async function updateSubmissionAction(
   } catch (err) {
     console.error('Update error:', err);
     return { error: 'Failed to update submission.' };
+  }
+}
+
+// ── Admin Booked Nights ────────────────────────────────────────────────────────
+
+export interface BookedDatesState {
+  error?: string;
+  /** What was actually stored, so the caller can settle on the server's answer
+   *  rather than on what it optimistically drew. */
+  dates?: string[];
+}
+
+/**
+ * Sets which of a booked comedian's available nights they're on.
+ *
+ * Called straight from the client rather than through a form: the dates are
+ * chips you toggle, and a whole form round-trip per tap would be heavier than
+ * the change it saves. The list is re-derived from the stored availability, so
+ * nobody ends up booked on a night they never offered.
+ */
+export async function setBookedDatesAction(
+  id: number,
+  dates: unknown,
+): Promise<BookedDatesState> {
+  if (!(await isAdmin())) {
+    return { error: 'Unauthorized' };
+  }
+  if (!Number.isInteger(id) || !Array.isArray(dates)) {
+    return { error: 'Missing submission id or dates.' };
+  }
+
+  try {
+    const sub = await getSubmission(id);
+    if (!sub) return { error: 'That submission no longer exists.' };
+    if (sub.status !== 'booked') {
+      return { error: 'Mark them booked before picking their nights.' };
+    }
+
+    const wanted = new Set(dates.filter((d): d is string => typeof d === 'string'));
+    // Availability order is the order the form offered the nights in, so
+    // rebuilding from it both filters and sorts in one pass.
+    const kept = sub.availability
+      .split(',')
+      .map((d) => d.trim())
+      .filter((d) => d && wanted.has(d));
+
+    await setBookedDates(id, kept.join(', '));
+    revalidatePath('/admin');
+    revalidatePath('/admin/lineup');
+    return { dates: kept };
+  } catch (err) {
+    console.error('Booked dates update failed:', err);
+    return { error: 'Failed to save their nights.' };
   }
 }
 
