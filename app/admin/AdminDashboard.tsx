@@ -29,21 +29,33 @@ import { instagramUrl, normalizeInstagram, toHttpUrl } from '../lib/normalize';
 const STATUS_OPTIONS: readonly SubmissionStatus[] = SUBMISSION_STATUSES;
 
 /**
- * Booked comedians live in their own tab, so the statuses you still have to act
- * on are the only ones the applicants tab filters by.
+ * Where a submission sits: the list you're working through, the lineup, or the
+ * pile you've said no to. Booked and declined both leave the working list —
+ * booked to its own tab, declined out of the way until you ask for them.
  */
-const PIPELINE_STATUSES = STATUS_OPTIONS.filter((s) => s !== 'booked');
+type Place = 'applicants' | 'booked' | 'declined';
 
+/** Declined isn't a tab of its own; it's the Declined card, pressed. */
 type TabKey = 'applicants' | 'booked';
 
-const TAB_LABELS: Record<TabKey, string> = {
+const PLACE_LABELS: Record<Place, string> = {
   applicants: 'Applicants',
   booked: 'Booked',
+  declined: 'Declined',
 };
 
-function tabFor(status: SubmissionStatus | string): TabKey {
-  return status === 'booked' ? 'booked' : 'applicants';
+const PLACES: Place[] = ['applicants', 'booked', 'declined'];
+
+function placeFor(status: SubmissionStatus | string): Place {
+  if (status === 'booked') return 'booked';
+  if (status === 'declined') return 'declined';
+  return 'applicants';
 }
+
+/** The statuses that still want something from you — the filter cards. */
+const ACTIVE_STATUSES = STATUS_OPTIONS.filter(
+  (s) => s !== 'booked' && s !== 'declined',
+);
 
 const STATUS_COLORS: Record<SubmissionStatus, string> = {
   new: 'bg-blue-500/20 text-blue-300',
@@ -854,19 +866,23 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sort, setSort] = useState<SortKey>('newest');
   const [page, setPage] = useState(1);
-  // Rows leave the tab you're on the moment a booking saves, so say where they went.
-  const [moved, setMoved] = useState<{ name: string; to: TabKey } | null>(null);
+  // Rows leave the list you're on the moment a status saves, so say where they went.
+  const [moved, setMoved] = useState<{ name: string; to: Place } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  /* Booked comedians are a separate list, not a status filter on the same one. */
-  const byTab = useMemo(() => {
-    const groups: Record<TabKey, Submission[]> = { applicants: [], booked: [] };
-    submissions.forEach((s) => groups[tabFor(s.status)].push(s));
+  /* Three lists, not one with filters on top: booked and declined are both out
+     of the working list, and only one of them wanted a tab. */
+  const byPlace = useMemo(() => {
+    const groups: Record<Place, Submission[]> = { applicants: [], booked: [], declined: [] };
+    submissions.forEach((s) => groups[placeFor(s.status)].push(s));
     return groups;
   }, [submissions]);
 
-  const scoped = byTab[tab];
+  /* Declined comedians stay hidden until the Declined card asks for them. */
+  const place: Place =
+    tab === 'booked' ? 'booked' : statusFilter === 'declined' ? 'declined' : 'applicants';
+  const scoped = byPlace[place];
 
   /* Built from every booked comedian, so both tabs colour dates the same way. */
   const nights = useMemo(() => buildNights(submissions), [submissions]);
@@ -878,32 +894,49 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
     [scoped, query],
   );
 
-  // Searching in one tab while the match sits in the other is the easiest way to
-  // conclude a submission has vanished — so count the other side too.
-  const otherTab: TabKey = tab === 'booked' ? 'applicants' : 'booked';
-  const otherTabMatches = useMemo(
-    () => (query ? byTab[otherTab].filter((s) => matchesSearch(s, query)).length : 0),
-    [byTab, otherTab, query],
-  );
+  // Searching in one list while the match sits in another is the easiest way to
+  // conclude a submission has vanished — so count everywhere else too.
+  const elsewhere = useMemo(() => {
+    if (!query) return [];
+    return PLACES.filter((p) => p !== place)
+      .map((p) => ({ place: p, count: byPlace[p].filter((s) => matchesSearch(s, query)).length }))
+      .filter((m) => m.count > 0);
+  }, [byPlace, place, query]);
 
-  // Pipeline order is meaningless once everyone in view is booked.
-  const effectiveSort: SortKey = tab === 'booked' && sort === 'status' ? 'newest' : sort;
+  // Pipeline order is meaningless once everyone in view shares one status.
+  const effectiveSort: SortKey =
+    place !== 'applicants' && sort === 'status' ? 'newest' : sort;
 
   const filtered = useMemo(() => {
+    // "declined" is the scope, not a filter within it; the rest narrow further.
     const items =
-      statusFilter === 'all' ? searched : searched.filter((s) => s.status === statusFilter);
+      statusFilter === 'all' || statusFilter === 'declined'
+        ? searched
+        : searched.filter((s) => s.status === statusFilter);
     return sortSubmissions(items, effectiveSort);
   }, [searched, statusFilter, effectiveSort]);
 
+  /* The cards always describe the working list, whichever list is on screen —
+     otherwise opening Declined would report zero of everything else. */
+  const applicantMatches = useMemo(
+    () => (query ? byPlace.applicants.filter((s) => matchesSearch(s, query)) : byPlace.applicants),
+    [byPlace, query],
+  );
+
   const counts = useMemo(() => {
-    const c: Record<string, number> = { total: searched.length };
-    PIPELINE_STATUSES.forEach((s) => {
-      c[s] = searched.filter((sub) => sub.status === s).length;
+    const c: Record<string, number> = { total: applicantMatches.length };
+    ACTIVE_STATUSES.forEach((s) => {
+      c[s] = applicantMatches.filter((sub) => sub.status === s).length;
     });
     return c;
-  }, [searched]);
+  }, [applicantMatches]);
 
-  const bookedTotal = byTab.booked.length;
+  const declinedCount = useMemo(
+    () => (query ? byPlace.declined.filter((s) => matchesSearch(s, query)).length : byPlace.declined.length),
+    [byPlace, query],
+  );
+
+  const bookedTotal = byPlace.booked.length;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   // Clamped rather than stored, so deleting the last row of the last page lands
@@ -941,19 +974,19 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
     searchRef.current?.focus();
   }
 
-  /* Status filters belong to the tab that offers them, so switching drops them.
+  /* Status filters belong to the list that offers them, so moving drops them.
      The search is deliberately kept — following a match across is the point. */
-  function switchTab(next: TabKey) {
-    setTab(next);
-    setStatusFilter('all');
+  function goToPlace(next: Place) {
+    setTab(next === 'booked' ? 'booked' : 'applicants');
+    setStatusFilter(next === 'declined' ? 'declined' : 'all');
     setPage(1);
     setMoved(null);
   }
 
   const handleStatusSaved = useCallback((sub: Submission, status: SubmissionStatus) => {
-    const to = tabFor(status);
-    // Only worth saying when the row actually changes tabs.
-    if (to === tabFor(sub.status)) return;
+    const to = placeFor(status);
+    // Only worth saying when the row actually leaves the list you're looking at.
+    if (to === placeFor(sub.status)) return;
     setMoved({ name: sub.name, to });
   }, []);
 
@@ -1011,14 +1044,14 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
           <TabButton
             tab="applicants"
             active={tab === 'applicants'}
-            count={byTab.applicants.length}
-            onClick={switchTab}
+            count={byPlace.applicants.length}
+            onClick={goToPlace}
           />
           <TabButton
             tab="booked"
             active={tab === 'booked'}
             count={bookedTotal}
-            onClick={switchTab}
+            onClick={goToPlace}
           />
         </div>
 
@@ -1028,15 +1061,15 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
             <div className="mb-4 flex items-center gap-3 rounded-xl border border-[#DC143C]/40 bg-[#DC143C]/10 px-4 py-3">
               <p className="min-w-0 flex-1 text-sm text-[#f0aebc]">
                 <span className="font-semibold text-white">{moved.name}</span> moved to{' '}
-                {TAB_LABELS[moved.to]}.
+                {PLACE_LABELS[moved.to]}.
               </p>
-              {tab !== moved.to && (
+              {place !== moved.to && (
                 <button
                   type="button"
-                  onClick={() => switchTab(moved.to)}
+                  onClick={() => goToPlace(moved.to)}
                   className="min-h-11 shrink-0 rounded-lg border border-[#DC143C]/50 px-3 text-xs font-semibold whitespace-nowrap text-white transition hover:bg-[#DC143C]/20 sm:min-h-0 sm:py-1.5"
                 >
-                  View {TAB_LABELS[moved.to]}
+                  View {PLACE_LABELS[moved.to]}
                 </button>
               )}
               <button
@@ -1059,9 +1092,9 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                 {search.trim() ? 'Matching booked' : 'Booked for the show'}
               </p>
               <p className="mt-0.5 text-xl font-extrabold text-[#DC143C] sm:text-2xl">
-                {counts.total}
+                {searched.length}
                 <span className="ml-2 text-xs font-semibold text-[#666]">
-                  {counts.total === 1 ? 'comedian' : 'comedians'}
+                  {searched.length === 1 ? 'comedian' : 'comedians'}
                 </span>
               </p>
             </div>
@@ -1075,13 +1108,13 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
         ) : (
           <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-5">
             <StatCard
-              label={search.trim() ? 'Matches' : 'Total'}
+              label={search.trim() ? 'Matches' : 'Waiting'}
               value={counts.total}
               accent
               active={statusFilter === 'all'}
               onClick={() => handleFilterClick('all')}
             />
-            {PIPELINE_STATUSES.map((s) => (
+            {ACTIVE_STATUSES.map((s) => (
               <StatCard
                 key={s}
                 label={s}
@@ -1090,6 +1123,14 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                 onClick={() => handleFilterClick(s)}
               />
             ))}
+            {/* Declined are kept out of the list above; this card is the way
+                back to them, and pressing it again puts them away. */}
+            <StatCard
+              label="declined"
+              value={declinedCount}
+              active={statusFilter === 'declined'}
+              onClick={() => handleFilterClick('declined')}
+            />
           </div>
         )}
 
@@ -1165,24 +1206,26 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:ml-auto">
             <p role="status" aria-live="polite" className="text-xs text-[#666]">
-              {filtersActive
-                ? `${filtered.length} of ${scoped.length} in ${TAB_LABELS[tab]}`
-                : `${scoped.length} ${
-                    tab === 'booked'
+              {filtered.length === scoped.length
+                ? `${scoped.length} ${
+                    place === 'booked'
                       ? `booked comedian${scoped.length === 1 ? '' : 's'}`
-                      : `submission${scoped.length === 1 ? '' : 's'}`
-                  }`}
+                      : place === 'declined'
+                        ? 'declined'
+                        : 'waiting on you'
+                  }`
+                : `${filtered.length} of ${scoped.length} in ${PLACE_LABELS[place]}`}
             </p>
-            {otherTabMatches > 0 && (
+            {elsewhere.map((m) => (
               <button
+                key={m.place}
                 type="button"
-                onClick={() => switchTab(otherTab)}
+                onClick={() => goToPlace(m.place)}
                 className="text-xs font-semibold text-[#DC143C] transition hover:underline"
               >
-                {otherTabMatches} match{otherTabMatches === 1 ? '' : 'es'} in{' '}
-                {TAB_LABELS[otherTab]} →
+                {m.count} in {PLACE_LABELS[m.place]} →
               </button>
-            )}
+            ))}
           </div>
         </div>
 
@@ -1190,14 +1233,17 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
         <div ref={listRef} className="admin-scroll-anchor">
           {filtered.length === 0 ? (
             <div className="rounded-xl border border-[#1e1e1e] bg-[#111] px-6 py-16 text-center">
+              {/* An empty list and an empty *result* are different problems. */}
               <p className="text-[#555]">
-                {filtersActive
+                {scoped.length > 0
                   ? 'No results match your filters.'
-                  : tab === 'booked'
+                  : place === 'booked'
                     ? 'Nobody is booked yet. Set someone’s status to Booked and they’ll move here.'
-                    : submissions.length === 0
-                      ? 'No submissions yet.'
-                      : 'Every submission is booked — they’re all in the Booked tab.'}
+                    : place === 'declined'
+                      ? 'Nobody has been declined.'
+                      : submissions.length === 0
+                        ? 'No submissions yet.'
+                        : 'Nothing waiting on you — everyone here is booked or declined.'}
               </p>
               {filtersActive && (
                 <button
@@ -1301,7 +1347,7 @@ function TabButton({
   tab: TabKey;
   active: boolean;
   count: number;
-  onClick: (tab: TabKey) => void;
+  onClick: (tab: Place) => void;
 }) {
   return (
     <button
@@ -1315,7 +1361,7 @@ function TabButton({
           : 'text-[#888] hover:bg-[#1a1a1a] hover:text-white'
       }`}
     >
-      {TAB_LABELS[tab]}
+      {PLACE_LABELS[tab]}
       <span
         className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
           active ? 'bg-black/25 text-white' : 'bg-[#1e1e1e] text-[#aaa]'
