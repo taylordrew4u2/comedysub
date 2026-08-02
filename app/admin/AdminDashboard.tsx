@@ -1,7 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { useState, useActionState, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import {
+  useCallback,
+  useState,
+  useActionState,
+  useEffect,
+  useMemo,
+  useRef,
+  type ReactNode,
+} from 'react';
 import {
   adminLogout,
   deleteSubmissionAction,
@@ -19,6 +27,23 @@ const STATUS_OPTIONS: SubmissionStatus[] = [
   'booked',
   'declined',
 ];
+
+/**
+ * Booked comedians live in their own tab, so the statuses you still have to act
+ * on are the only ones the applicants tab filters by.
+ */
+const PIPELINE_STATUSES = STATUS_OPTIONS.filter((s) => s !== 'booked');
+
+type TabKey = 'applicants' | 'booked';
+
+const TAB_LABELS: Record<TabKey, string> = {
+  applicants: 'Applicants',
+  booked: 'Booked',
+};
+
+function tabFor(status: SubmissionStatus | string): TabKey {
+  return status === 'booked' ? 'booked' : 'applicants';
+}
 
 const STATUS_COLORS: Record<SubmissionStatus, string> = {
   new: 'bg-blue-500/20 text-blue-300',
@@ -212,12 +237,33 @@ function DeleteForm({ sub }: { sub: Submission }) {
  * against what the server last accepted, rather than a flag that any stray
  * change event — a blur, say — could flip back on after a successful save.
  */
-function RowForm({ sub, children }: { sub: Submission; children?: ReactNode }) {
+function RowForm({
+  sub,
+  onStatusSaved,
+  children,
+}: {
+  sub: Submission;
+  /** Fired once per accepted save that changed the status, so the dashboard can
+   *  explain why the row is about to leave the tab you're looking at. */
+  onStatusSaved?: (sub: Submission, status: SubmissionStatus) => void;
+  children?: ReactNode;
+}) {
   const initial: UpdateState = {};
   const [state, formAction, isPending] = useActionState(updateSubmissionAction, initial);
   const [status, setStatus] = useState<string>(sub.status);
   const [notes, setNotes] = useState(sub.admin_notes ?? '');
   const [lastSent, setLastSent] = useState({ status: sub.status as string, notes: sub.admin_notes ?? '' });
+
+  // Each save returns a fresh state object, so identity is enough to tell a new
+  // result from a re-render caused by anything else.
+  const announced = useRef<UpdateState | null>(null);
+  useEffect(() => {
+    if (!state.success || announced.current === state) return;
+    announced.current = state;
+    if (lastSent.status !== sub.status) {
+      onStatusSaved?.(sub, lastSent.status as SubmissionStatus);
+    }
+  }, [state, lastSent, sub, onStatusSaved]);
 
   const dirty = status !== lastSent.status || notes !== lastSent.notes;
   const saved = state.success && !dirty;
@@ -277,7 +323,13 @@ function RowForm({ sub, children }: { sub: Submission; children?: ReactNode }) {
 }
 
 /* Mobile/tablet view — a tappable card per submission instead of a wide table. */
-function SubmissionCard({ sub }: { sub: Submission }) {
+function SubmissionCard({
+  sub,
+  onStatusSaved,
+}: {
+  sub: Submission;
+  onStatusSaved?: (sub: Submission, status: SubmissionStatus) => void;
+}) {
   // Normalised at render so rows saved before normalisation existed link correctly.
   const handle = normalizeInstagram(sub.instagram);
   const igHref = instagramUrl(sub.instagram);
@@ -374,12 +426,24 @@ function SubmissionCard({ sub }: { sub: Submission }) {
           <span className="text-[#555] transition group-open:rotate-180" aria-hidden="true">▾</span>
         </summary>
         <div className="pt-2">
-          <RowForm sub={sub}>
+          <RowForm sub={sub} onStatusSaved={onStatusSaved}>
             <DeleteForm sub={sub} />
           </RowForm>
         </div>
       </details>
     </div>
+  );
+}
+
+/** Shared by both tabs, so a search counts the same thing on either side. */
+function matchesSearch(sub: Submission, query: string): boolean {
+  return (
+    sub.name.toLowerCase().includes(query) ||
+    (sub.email ?? '').toLowerCase().includes(query) ||
+    (sub.instagram ?? '').toLowerCase().includes(query) ||
+    (sub.location ?? '').toLowerCase().includes(query) ||
+    (sub.admin_notes ?? '').toLowerCase().includes(query) ||
+    (sub.questions ?? '').toLowerCase().includes(query)
   );
 }
 
@@ -407,46 +471,58 @@ function sortSubmissions(items: Submission[], sort: SortKey): Submission[] {
 }
 
 export default function AdminDashboard({ submissions }: { submissions: Submission[] }) {
+  const [tab, setTab] = useState<TabKey>('applicants');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sort, setSort] = useState<SortKey>('newest');
   const [page, setPage] = useState(1);
+  // Rows leave the tab you're on the moment a booking saves, so say where they went.
+  const [moved, setMoved] = useState<{ name: string; to: TabKey } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  /* Search first, so the stat cards can count within the current search. */
-  const searched = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return submissions;
-    return submissions.filter(
-      (s) =>
-        s.name.toLowerCase().includes(q) ||
-        (s.email ?? '').toLowerCase().includes(q) ||
-        (s.instagram ?? '').toLowerCase().includes(q) ||
-        (s.location ?? '').toLowerCase().includes(q) ||
-        (s.admin_notes ?? '').toLowerCase().includes(q) ||
-        (s.questions ?? '').toLowerCase().includes(q),
-    );
-  }, [submissions, search]);
+  /* Booked comedians are a separate list, not a status filter on the same one. */
+  const byTab = useMemo(() => {
+    const groups: Record<TabKey, Submission[]> = { applicants: [], booked: [] };
+    submissions.forEach((s) => groups[tabFor(s.status)].push(s));
+    return groups;
+  }, [submissions]);
+
+  const scoped = byTab[tab];
+
+  /* Search next, so the stat cards can count within the current search. */
+  const query = search.trim().toLowerCase();
+  const searched = useMemo(
+    () => (query ? scoped.filter((s) => matchesSearch(s, query)) : scoped),
+    [scoped, query],
+  );
+
+  // Searching in one tab while the match sits in the other is the easiest way to
+  // conclude a submission has vanished — so count the other side too.
+  const otherTab: TabKey = tab === 'booked' ? 'applicants' : 'booked';
+  const otherTabMatches = useMemo(
+    () => (query ? byTab[otherTab].filter((s) => matchesSearch(s, query)).length : 0),
+    [byTab, otherTab, query],
+  );
+
+  // Pipeline order is meaningless once everyone in view is booked.
+  const effectiveSort: SortKey = tab === 'booked' && sort === 'status' ? 'newest' : sort;
 
   const filtered = useMemo(() => {
     const items =
       statusFilter === 'all' ? searched : searched.filter((s) => s.status === statusFilter);
-    return sortSubmissions(items, sort);
-  }, [searched, statusFilter, sort]);
+    return sortSubmissions(items, effectiveSort);
+  }, [searched, statusFilter, effectiveSort]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { total: searched.length };
-    STATUS_OPTIONS.forEach((s) => {
+    PIPELINE_STATUSES.forEach((s) => {
       c[s] = searched.filter((sub) => sub.status === s).length;
     });
     return c;
   }, [searched]);
 
-  const bookedTotal = useMemo(
-    () => submissions.filter((s) => s.status === 'booked').length,
-    [submissions],
-  );
+  const bookedTotal = byTab.booked.length;
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   // Clamped rather than stored, so deleting the last row of the last page lands
@@ -483,6 +559,22 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
     setPage(1);
     searchRef.current?.focus();
   }
+
+  /* Status filters belong to the tab that offers them, so switching drops them.
+     The search is deliberately kept — following a match across is the point. */
+  function switchTab(next: TabKey) {
+    setTab(next);
+    setStatusFilter('all');
+    setPage(1);
+    setMoved(null);
+  }
+
+  const handleStatusSaved = useCallback((sub: Submission, status: SubmissionStatus) => {
+    const to = tabFor(status);
+    // Only worth saying when the row actually changes tabs.
+    if (to === tabFor(sub.status)) return;
+    setMoved({ name: sub.name, to });
+  }, []);
 
   // Paging on a phone otherwise leaves you at the bottom of the previous page.
   function goToPage(next: number) {
@@ -529,25 +621,96 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
       </header>
 
       <main className="px-safe pb-safe mx-auto max-w-7xl py-6 sm:py-8">
-        {/* ── Stats / Filter cards ── */}
-        <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-6">
-          <StatCard
-            label={search.trim() ? 'Matches' : 'Total'}
-            value={counts.total}
-            accent
-            active={statusFilter === 'all'}
-            onClick={() => handleFilterClick('all')}
+        {/* ── Tabs ── */}
+        <div
+          role="tablist"
+          aria-label="Submission lists"
+          className="mb-4 grid w-full grid-cols-2 gap-1 rounded-xl border border-[#1e1e1e] bg-[#111] p-1 sm:w-fit"
+        >
+          <TabButton
+            tab="applicants"
+            active={tab === 'applicants'}
+            count={byTab.applicants.length}
+            onClick={switchTab}
           />
-          {STATUS_OPTIONS.map((s) => (
-            <StatCard
-              key={s}
-              label={s}
-              value={counts[s] ?? 0}
-              active={statusFilter === s}
-              onClick={() => handleFilterClick(s)}
-            />
-          ))}
+          <TabButton
+            tab="booked"
+            active={tab === 'booked'}
+            count={bookedTotal}
+            onClick={switchTab}
+          />
         </div>
+
+        {/* Announces the move for screen readers; mounted so the update is heard. */}
+        <div role="status" aria-live="polite">
+          {moved && (
+            <div className="mb-4 flex items-center gap-3 rounded-xl border border-[#DC143C]/40 bg-[#DC143C]/10 px-4 py-3">
+              <p className="min-w-0 flex-1 text-sm text-[#f0aebc]">
+                <span className="font-semibold text-white">{moved.name}</span> moved to{' '}
+                {TAB_LABELS[moved.to]}.
+              </p>
+              {tab !== moved.to && (
+                <button
+                  type="button"
+                  onClick={() => switchTab(moved.to)}
+                  className="min-h-11 shrink-0 rounded-lg border border-[#DC143C]/50 px-3 text-xs font-semibold whitespace-nowrap text-white transition hover:bg-[#DC143C]/20 sm:min-h-0 sm:py-1.5"
+                >
+                  View {TAB_LABELS[moved.to]}
+                </button>
+              )}
+              <button
+                type="button"
+                aria-label="Dismiss"
+                onClick={() => setMoved(null)}
+                className="shrink-0 px-1 text-lg leading-none text-[#888] transition hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ── Stats / Filter cards ── */}
+        {tab === 'booked' ? (
+          <div className="mb-6 flex flex-col gap-3 rounded-xl border border-[#1e1e1e] bg-[#111] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[#555]">
+                {search.trim() ? 'Matching booked' : 'Booked for the show'}
+              </p>
+              <p className="mt-0.5 text-xl font-extrabold text-[#DC143C] sm:text-2xl">
+                {counts.total}
+                <span className="ml-2 text-xs font-semibold text-[#666]">
+                  {counts.total === 1 ? 'comedian' : 'comedians'}
+                </span>
+              </p>
+            </div>
+            <Link
+              href="/admin/lineup"
+              className="flex min-h-11 items-center justify-center rounded-lg border border-[#2a2a2a] px-4 text-xs font-semibold text-[#aaa] transition hover:border-[#DC143C] hover:text-white sm:min-h-0 sm:py-2"
+            >
+              Export lineup PDF
+            </Link>
+          </div>
+        ) : (
+          <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-5">
+            <StatCard
+              label={search.trim() ? 'Matches' : 'Total'}
+              value={counts.total}
+              accent
+              active={statusFilter === 'all'}
+              onClick={() => handleFilterClick('all')}
+            />
+            {PIPELINE_STATUSES.map((s) => (
+              <StatCard
+                key={s}
+                label={s}
+                value={counts[s] ?? 0}
+                active={statusFilter === s}
+                onClick={() => handleFilterClick(s)}
+              />
+            ))}
+          </div>
+        )}
 
         {/* ── Search / sort ── */}
         <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
@@ -588,7 +751,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
           <label className="flex items-center gap-2 text-xs text-[#666]">
             <span className="shrink-0">Sort</span>
             <select
-              value={sort}
+              value={effectiveSort}
               onChange={(e) => {
                 setSort(e.target.value as SortKey);
                 setPage(1);
@@ -596,11 +759,14 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
               aria-label="Sort submissions"
               className="min-h-12 w-full rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-2 text-base text-white focus:border-[#DC143C] focus:outline-none sm:min-h-0 sm:w-auto sm:py-2 sm:text-sm"
             >
-              {(Object.keys(SORT_LABELS) as SortKey[]).map((key) => (
-                <option key={key} value={key}>
-                  {SORT_LABELS[key]}
-                </option>
-              ))}
+              {(Object.keys(SORT_LABELS) as SortKey[])
+                // Everyone here shares one status, so grouping by it does nothing.
+                .filter((key) => key !== 'status' || tab !== 'booked')
+                .map((key) => (
+                  <option key={key} value={key}>
+                    {SORT_LABELS[key]}
+                  </option>
+                ))}
             </select>
           </label>
 
@@ -614,11 +780,27 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
             </button>
           )}
 
-          <p role="status" aria-live="polite" className="text-xs text-[#666] sm:ml-auto">
-            {filtersActive
-              ? `${filtered.length} of ${submissions.length} submissions`
-              : `${submissions.length} submission${submissions.length === 1 ? '' : 's'}`}
-          </p>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:ml-auto">
+            <p role="status" aria-live="polite" className="text-xs text-[#666]">
+              {filtersActive
+                ? `${filtered.length} of ${scoped.length} in ${TAB_LABELS[tab]}`
+                : `${scoped.length} ${
+                    tab === 'booked'
+                      ? `booked comedian${scoped.length === 1 ? '' : 's'}`
+                      : `submission${scoped.length === 1 ? '' : 's'}`
+                  }`}
+            </p>
+            {otherTabMatches > 0 && (
+              <button
+                type="button"
+                onClick={() => switchTab(otherTab)}
+                className="text-xs font-semibold text-[#DC143C] transition hover:underline"
+              >
+                {otherTabMatches} match{otherTabMatches === 1 ? '' : 'es'} in{' '}
+                {TAB_LABELS[otherTab]} →
+              </button>
+            )}
+          </div>
         </div>
 
         {/* ── Results ── */}
@@ -626,9 +808,13 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
           {filtered.length === 0 ? (
             <div className="rounded-xl border border-[#1e1e1e] bg-[#111] px-6 py-16 text-center">
               <p className="text-[#555]">
-                {submissions.length === 0
-                  ? 'No submissions yet.'
-                  : 'No results match your filters.'}
+                {filtersActive
+                  ? 'No results match your filters.'
+                  : tab === 'booked'
+                    ? 'Nobody is booked yet. Set someone’s status to Booked and they’ll move here.'
+                    : submissions.length === 0
+                      ? 'No submissions yet.'
+                      : 'Every submission is booked — they’re all in the Booked tab.'}
               </p>
               {filtersActive && (
                 <button
@@ -645,7 +831,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
               {/* Cards — phones and tablets */}
               <div className="flex flex-col gap-3 lg:hidden">
                 {paginated.map((sub) => (
-                  <SubmissionCard key={sub.id} sub={sub} />
+                  <SubmissionCard key={sub.id} sub={sub} onStatusSaved={handleStatusSaved} />
                 ))}
               </div>
 
@@ -772,7 +958,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                           </td>
 
                           <td className="w-56 px-4 py-3">
-                            <RowForm sub={sub}>
+                            <RowForm sub={sub} onStatusSaved={handleStatusSaved}>
                               <DeleteForm sub={sub} />
                             </RowForm>
                           </td>
@@ -813,6 +999,41 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
         </div>
       </main>
     </div>
+  );
+}
+
+function TabButton({
+  tab,
+  active,
+  count,
+  onClick,
+}: {
+  tab: TabKey;
+  active: boolean;
+  count: number;
+  onClick: (tab: TabKey) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={() => onClick(tab)}
+      className={`flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold transition sm:px-8 ${
+        active
+          ? 'bg-[#DC143C] text-white'
+          : 'text-[#888] hover:bg-[#1a1a1a] hover:text-white'
+      }`}
+    >
+      {TAB_LABELS[tab]}
+      <span
+        className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+          active ? 'bg-black/25 text-white' : 'bg-[#1e1e1e] text-[#aaa]'
+        }`}
+      >
+        {count}
+      </span>
+    </button>
   );
 }
 
