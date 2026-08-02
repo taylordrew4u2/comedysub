@@ -82,7 +82,7 @@ function validate(fields: Fields, availability: number[], headshot: File | null)
     problems.video_url = 'That doesn’t look like a link — paste the whole URL.';
   }
 
-  if (!fields.instagram.trim()) problems.instagram = 'Add your Instagram — it’s how we’ll reach you.';
+  if (!fields.instagram.trim()) problems.instagram = 'Add your Instagram — it’s one of the ways we’ll reach you.';
   else if (!instagramUrl(fields.instagram)) {
     problems.instagram = 'That doesn’t look like a handle — try @yourname.';
   }
@@ -691,10 +691,12 @@ export default function WebForm() {
             We&apos;ll be in touch if you&apos;re shortlisted.
           </p>
           {/* Said here as well as on the form — this is the screen people
-              actually read, and a DM from a stranger lands in Requests. */}
+              actually read, and both a DM from a stranger and a first email
+              land somewhere you have to go looking. */}
           <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-[#aaa]">
-            We message on <span className="font-semibold text-white">Instagram</span>, so keep
-            an eye on your DMs — including your message requests.
+            We message on <span className="font-semibold text-white">Instagram</span> and by{' '}
+            <span className="font-semibold text-white">email</span> — so keep an eye on your DMs
+            (including message requests) and your spam folder.
           </p>
           {agreement === 'agreed' && (
             <p className="mt-3 text-xs font-semibold text-[#DC143C]">
@@ -828,7 +830,7 @@ export default function WebForm() {
           <FieldError id="instagram-error" message={problems.instagram} />
           {!problems.instagram && (
             <p className="mt-1.5 text-xs text-[#666]">
-              This is how we&apos;ll reach you — keep an eye on your DMs and message requests.
+              We message here as well as by email — keep an eye on your DMs and message requests.
             </p>
           )}
         </div>
