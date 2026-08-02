@@ -20,6 +20,7 @@
 - [x] Write and store reusable email templates in the admin (`/admin/templates`)
 - [x] Split the admin into Applicants and Booked tabs — booking someone moves them across
 - [x] Pick which nights a booked comedian is on, and flag dates that already have a comic
+- [x] Admin table fits the screen — no sideways scrolling, one-tap status, notes fold away
 
 ## Up Next
 - [ ] Send confirmation email to comedian on submission

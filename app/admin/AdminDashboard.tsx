@@ -9,26 +9,24 @@ import {
   useMemo,
   useRef,
   useTransition,
-  type ReactNode,
 } from 'react';
 import {
   adminLogout,
   deleteSubmissionAction,
+  saveNotesAction,
   setBookedDatesAction,
-  updateSubmissionAction,
+  setStatusAction,
   type DeleteState,
   type UpdateState,
 } from '../actions';
-import type { Submission, SubmissionStatus } from '../lib/db';
+import {
+  SUBMISSION_STATUSES,
+  type Submission,
+  type SubmissionStatus,
+} from '../lib/db';
 import { instagramUrl, normalizeInstagram, toHttpUrl } from '../lib/normalize';
 
-const STATUS_OPTIONS: SubmissionStatus[] = [
-  'new',
-  'reviewed',
-  'contacted',
-  'booked',
-  'declined',
-];
+const STATUS_OPTIONS: readonly SubmissionStatus[] = SUBMISSION_STATUSES;
 
 /**
  * Booked comedians live in their own tab, so the statuses you still have to act
@@ -86,14 +84,6 @@ function formatDateTime(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-function StatusBadge({ status }: { status: string }) {
-  return (
-    <span className={`${BADGE} ${STATUS_COLORS[status as SubmissionStatus] ?? ''}`}>
-      {status}
-    </span>
-  );
 }
 
 function Avatar({ sub, className = 'h-12 w-12 text-sm' }: { sub: Submission; className?: string }) {
@@ -401,95 +391,142 @@ function DeleteForm({ sub }: { sub: Submission }) {
 }
 
 /**
- * Status + notes editor, with the delete control (`children`) below it.
- *
- * The fields are controlled: React resets an uncontrolled form once its action
- * settles, which threw away a half-written note whenever the save came back
- * with an error. Holding the values here also makes "unsaved" a comparison
- * against what the server last accepted, rather than a flag that any stray
- * change event — a blur, say — could flip back on after a successful save.
+ * The status badge and the status control are the same object: a pill in the
+ * status' own colours that saves the moment you pick. Moving someone along the
+ * pipeline is one decision, and a Save button for it only ever cost a click —
+ * so the pill draws the new status immediately and puts it back if the server
+ * says no.
  */
-function RowForm({
+function StatusPill({
   sub,
-  onStatusSaved,
-  children,
+  onSaved,
+  className = '',
 }: {
   sub: Submission;
-  /** Fired once per accepted save that changed the status, so the dashboard can
-   *  explain why the row is about to leave the tab you're looking at. */
-  onStatusSaved?: (sub: Submission, status: SubmissionStatus) => void;
-  children?: ReactNode;
+  /** Fired on an accepted change, so the dashboard can say where the row went. */
+  onSaved?: (sub: Submission, status: SubmissionStatus) => void;
+  className?: string;
 }) {
-  const initial: UpdateState = {};
-  const [state, formAction, isPending] = useActionState(updateSubmissionAction, initial);
-  const [status, setStatus] = useState<string>(sub.status);
-  const [notes, setNotes] = useState(sub.admin_notes ?? '');
-  const [lastSent, setLastSent] = useState({ status: sub.status as string, notes: sub.admin_notes ?? '' });
+  const [status, setStatus] = useState<SubmissionStatus>(sub.status);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
 
-  // Each save returns a fresh state object, so identity is enough to tell a new
-  // result from a re-render caused by anything else.
-  const announced = useRef<UpdateState | null>(null);
-  useEffect(() => {
-    if (!state.success || announced.current === state) return;
-    announced.current = state;
-    if (lastSent.status !== sub.status) {
-      onStatusSaved?.(sub, lastSent.status as SubmissionStatus);
-    }
-  }, [state, lastSent, sub, onStatusSaved]);
-
-  const dirty = status !== lastSent.status || notes !== lastSent.notes;
-  const saved = state.success && !dirty;
+  function choose(next: SubmissionStatus) {
+    if (next === status) return;
+    const previous = status;
+    setStatus(next);
+    setError(null);
+    startTransition(async () => {
+      const result = await setStatusAction(sub.id, next);
+      if (result.error) {
+        setError(result.error);
+        setStatus(previous);
+      } else {
+        onSaved?.(sub, next);
+      }
+    });
+  }
 
   return (
-    <div className="flex flex-col gap-2">
-      <form
-        action={(formData) => {
-          setLastSent({ status, notes });
-          formAction(formData);
-        }}
-        className="flex flex-col gap-2"
-      >
-        <input type="hidden" name="id" value={sub.id} />
+    <div className={`flex min-w-0 flex-col gap-1 ${className}`}>
+      <div className="relative">
         <select
-          name="status"
           aria-label={`Status for ${sub.name}`}
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="min-h-11 rounded border border-[#2a2a2a] bg-[#1a1a1a] px-2 py-1 text-xs text-white focus:border-[#DC143C] focus:outline-none lg:min-h-0"
+          disabled={isPending}
+          onChange={(e) => choose(e.target.value as SubmissionStatus)}
+          /* Spelled out rather than composed from BADGE: the pill needs its own
+             padding, and two competing padding utilities is a coin toss. */
+          className={`min-h-11 w-full cursor-pointer appearance-none rounded py-1.5 pr-6 pl-2.5 text-[10px] font-bold uppercase transition disabled:opacity-60 lg:min-h-0 ${STATUS_COLORS[status]}`}
         >
           {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {s.charAt(0).toUpperCase() + s.slice(1)}
+            // The pill is tinted; the dropdown itself is drawn by the OS, so its
+            // options need colours of their own.
+            <option key={s} value={s} className="bg-[#1a1a1a] text-white">
+              {s}
             </option>
           ))}
         </select>
-        <textarea
-          name="admin_notes"
-          aria-label={`Notes for ${sub.name}`}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={2}
-          placeholder="Notes…"
-          className="w-full resize-none rounded border border-[#2a2a2a] bg-[#1a1a1a] px-2 py-1.5 text-xs text-white placeholder:text-[#444] focus:border-[#DC143C] focus:outline-none"
-        />
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-[8px] opacity-70"
+        >
+          ▼
+        </span>
+      </div>
+      <p role="status" aria-live="polite" className="text-[10px] text-red-400 empty:hidden">
+        {error}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Notes are a deliberate write, so they keep their Save button.
+ *
+ * The field is controlled: React resets an uncontrolled form once its action
+ * settles, which threw away a half-written note whenever the save came back
+ * with an error. Holding the value here also makes "unsaved" a comparison
+ * against what the server last accepted, rather than a flag that any stray
+ * change event — a blur, say — could flip back on after a successful save.
+ */
+function NotesForm({ sub }: { sub: Submission }) {
+  const initial: UpdateState = {};
+  const [state, formAction, isPending] = useActionState(saveNotesAction, initial);
+  const [notes, setNotes] = useState(sub.admin_notes ?? '');
+  const [lastSent, setLastSent] = useState(sub.admin_notes ?? '');
+
+  const dirty = notes !== lastSent;
+  const saved = state.success && !dirty;
+
+  return (
+    <form
+      action={(formData) => {
+        setLastSent(notes);
+        formAction(formData);
+      }}
+      className="flex min-w-0 flex-col gap-2"
+    >
+      <input type="hidden" name="id" value={sub.id} />
+      <textarea
+        name="admin_notes"
+        aria-label={`Notes for ${sub.name}`}
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        rows={2}
+        placeholder="Notes…"
+        className="w-full resize-y rounded-lg border border-[#2a2a2a] bg-[#141414] px-2.5 py-2 text-xs text-white placeholder:text-[#444] focus:border-[#DC143C] focus:outline-none"
+      />
+      <div className="flex items-center gap-3">
         <button
           type="submit"
           disabled={isPending || saved}
-          className={`min-h-11 rounded px-3 py-1 text-xs font-semibold transition disabled:opacity-50 lg:min-h-0 ${
+          className={`min-h-11 rounded-lg px-3 text-xs font-semibold transition disabled:opacity-50 lg:min-h-0 lg:py-1.5 ${
             saved ? 'bg-[#1a1a1a] text-[#666]' : 'bg-[#DC143C] text-white hover:bg-[#b01030]'
           }`}
         >
-          {isPending ? 'Saving…' : saved ? '✓ Saved' : dirty ? 'Save changes' : 'Save'}
+          {isPending ? 'Saving…' : saved ? '✓ Saved' : 'Save notes'}
         </button>
         {/* Present from first render so screen readers announce the result. */}
         <p role="status" aria-live="polite" className="text-[10px] text-red-400 empty:hidden">
           {state.error}
           {!state.error && saved ? (
-            <span className="sr-only">Saved {sub.name}&apos;s status and notes.</span>
+            <span className="sr-only">Saved {sub.name}&apos;s notes.</span>
           ) : null}
         </p>
-      </form>
-      {children}
+      </div>
+    </form>
+  );
+}
+
+/** The notes + delete panel, shared by the desktop row and the phone card. */
+function EditPanel({ sub }: { sub: Submission }) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+      <div className="min-w-0 flex-1 sm:max-w-2xl">
+        <NotesForm sub={sub} />
+      </div>
+      <DeleteForm sub={sub} />
     </div>
   );
 }
@@ -517,7 +554,9 @@ function SubmissionCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <p className="truncate font-semibold text-white">{sub.name}</p>
-            <StatusBadge status={sub.status} />
+            {/* Sized by its widest option rather than a fixed width, so
+                "Contacted" doesn't come out as "Contact". */}
+            <StatusPill sub={sub} onSaved={onStatusSaved} className="shrink-0" />
           </div>
           <p className="mt-0.5 truncate text-xs text-[#555]">
             #{sub.id} · <span title={formatDateTime(sub.submitted_at)}>{formatDate(sub.submitted_at)}</span>
@@ -600,22 +639,177 @@ function SubmissionCard({
         </div>
       )}
 
-      {/* Editing is collapsed by default so the list stays scannable on a phone. */}
+      {/* The status is now a tap on the pill above; only the deliberate edits
+          stay folded away, so the list keeps its shape on a phone. */}
       <details className="group mt-3 border-t border-[#1a1a1a] pt-3">
         <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between text-xs font-semibold text-[#888] transition hover:text-white">
           <span>
-            Status &amp; notes
+            Notes &amp; delete
             {sub.admin_notes ? <span className="ml-1.5 text-[#DC143C]">•</span> : null}
           </span>
           <span className="text-[#555] transition group-open:rotate-180" aria-hidden="true">▾</span>
         </summary>
         <div className="pt-2">
-          <RowForm sub={sub} onStatusSaved={onStatusSaved}>
-            <DeleteForm sub={sub} />
-          </RowForm>
+          <EditPanel sub={sub} />
         </div>
       </details>
     </div>
+  );
+}
+
+/**
+ * Desktop row.
+ *
+ * Every column is a percentage of the table (see the colgroup), so the grid
+ * fits whatever width it's given instead of forcing the page sideways. What
+ * used to be its own column now lives where it costs no width: the video sits
+ * with the other links, and notes and delete fold into a panel under the row.
+ * A question is never folded away — it gets its own full-width line, so it's
+ * read in full rather than through a 300px porthole.
+ */
+function SubmissionRow({
+  sub,
+  nights,
+  onStatusSaved,
+}: {
+  sub: Submission;
+  nights: NightIndex;
+  onStatusSaved?: (sub: Submission, status: SubmissionStatus) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const handle = normalizeInstagram(sub.instagram);
+  const igHref = instagramUrl(sub.instagram);
+  const videoHref = toHttpUrl(sub.video_url);
+
+  return (
+    <tbody className="border-b border-[#1a1a1a] align-top transition hover:bg-[#101010]">
+      <tr>
+        <td className="px-3 py-3">
+          <div className="flex items-start gap-2.5">
+            <Avatar sub={sub} className="h-9 w-9 text-xs" />
+            <div className="min-w-0">
+              <p className="truncate font-medium text-white" title={sub.name}>
+                {sub.name}
+              </p>
+              <p className="mt-0.5 truncate text-[11px] text-[#555]">
+                #{sub.id}
+                {sub.location ? ` · ${sub.location}` : ''}
+              </p>
+            </div>
+          </div>
+        </td>
+
+        {/* Everything you'd click to find out more about them, in one place. */}
+        <td className="px-3 py-3 text-xs">
+          <div className="flex flex-col items-start gap-1">
+            {videoHref ? (
+              <a
+                href={videoHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex max-w-full items-center gap-1 rounded bg-[#1a1a1a] px-2 py-1 text-[#DC143C] transition hover:bg-[#2a2a2a]"
+              >
+                ▶ Watch
+              </a>
+            ) : sub.video_url ? (
+              <span className="block max-w-full truncate text-[#888]" title={sub.video_url}>
+                {sub.video_url}
+              </span>
+            ) : null}
+            {sub.email ? (
+              <a
+                href={`mailto:${sub.email}`}
+                className="block max-w-full truncate text-[#aaa] hover:text-[#DC143C] hover:underline"
+                title={sub.email}
+              >
+                {sub.email}
+              </a>
+            ) : null}
+            {igHref ? (
+              <a
+                href={igHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block max-w-full truncate text-[#888] hover:text-[#DC143C] hover:underline"
+              >
+                @{handle}
+              </a>
+            ) : handle ? (
+              <span className="block max-w-full truncate text-[#888]">{handle}</span>
+            ) : null}
+            {!videoHref && !sub.video_url && !sub.email && !handle ? (
+              <span className="text-[#333]">—</span>
+            ) : null}
+          </div>
+        </td>
+
+        <td className="px-3 py-3">
+          {sub.status === 'booked' ? (
+            <BookedNightPicker sub={sub} nights={nights} />
+          ) : (
+            <AvailabilityChips sub={sub} nights={nights} />
+          )}
+        </td>
+
+        <td className="px-3 py-3">
+          <FlagBadges sub={sub} />
+        </td>
+
+        <td className="px-3 py-3 text-[11px] text-[#555]">
+          <span title={formatDateTime(sub.submitted_at)}>{formatDate(sub.submitted_at)}</span>
+        </td>
+
+        <td className="px-3 py-3">
+          <div className="flex items-start gap-1.5">
+            <StatusPill sub={sub} onSaved={onStatusSaved} className="flex-1" />
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              aria-expanded={open}
+              aria-label={`Notes and delete for ${sub.name}`}
+              title="Notes & delete"
+              className={`relative flex h-[26px] w-7 shrink-0 items-center justify-center rounded border border-[#2a2a2a] text-[10px] transition hover:border-[#DC143C] hover:text-white ${
+                open ? 'rotate-180 text-white' : 'text-[#666]'
+              }`}
+            >
+              ▾
+              {/* A note you can't see is a note you forget you wrote. */}
+              {sub.admin_notes && !open ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-[#DC143C]"
+                />
+              ) : null}
+            </button>
+          </div>
+        </td>
+      </tr>
+
+      {sub.questions && (
+        <tr>
+          <td colSpan={6} className="px-3 pb-3">
+            <div className="rounded border-l-2 border-[#DC143C]/60 bg-[#0f0f0f] py-2 pr-3 pl-3">
+              <p className="text-[10px] font-semibold tracking-wider uppercase text-[#DC143C]">
+                Asked a question
+              </p>
+              <p className="mt-0.5 text-xs leading-relaxed break-words whitespace-pre-wrap text-[#bbb]">
+                {sub.questions}
+              </p>
+            </div>
+          </td>
+        </tr>
+      )}
+
+      {open && (
+        <tr>
+          <td colSpan={6} className="px-3 pb-4">
+            <div className="rounded-lg border border-[#1e1e1e] bg-[#0f0f0f] p-3">
+              <EditPanel sub={sub} />
+            </div>
+          </td>
+        </tr>
+      )}
+    </tbody>
   );
 }
 
@@ -1029,141 +1223,39 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
                 ))}
               </div>
 
-              {/* Table — desktop only, where the full width actually fits */}
-              <div className="hidden overflow-x-auto rounded-xl border border-[#1e1e1e] lg:block">
-                <table className="w-full min-w-[1300px] text-sm">
+              {/* Table — desktop, laid out in percentages so it always fits */}
+              {/* No overflow clipping here: it would trap the sticky header
+                  inside this box instead of pinning it under the admin bar. */}
+              <div className="hidden rounded-xl border border-[#1e1e1e] lg:block">
+                <table className="w-full table-fixed text-sm">
+                  <colgroup>
+                    <col className="w-[24%]" />
+                    <col className="w-[18%]" />
+                    <col className="w-[22%]" />
+                    <col className="w-[12%]" />
+                    <col className="w-[8%]" />
+                    <col className="w-[16%]" />
+                  </colgroup>
                   <thead>
-                    <tr className="border-b border-[#1e1e1e] bg-[#111] text-left text-[10px] font-semibold uppercase tracking-wider text-[#555]">
-                      <th className="min-w-[210px] px-4 py-3">Comedian</th>
-                      <th className="px-4 py-3">Contact</th>
-                      <th className="px-4 py-3">Video</th>
-                      <th className="px-4 py-3">Available</th>
-                      <th className="px-4 py-3">Answers</th>
-                      <th className="w-[300px] px-4 py-3">Questions</th>
-                      <th className="px-4 py-3">Submitted</th>
-                      <th className="w-56 px-4 py-3">Status / Notes</th>
+                    {/* Sticky under the admin bar: the header of a long list is
+                        worth more on screen than the row it would cover. */}
+                    <tr className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#555] [&>th:first-child]:rounded-tl-xl [&>th:last-child]:rounded-tr-xl [&>th]:sticky [&>th]:top-[var(--admin-header-h)] [&>th]:z-10 [&>th]:bg-[#111] [&>th]:px-3 [&>th]:py-3 [&>th]:shadow-[inset_0_-1px_0_#1e1e1e]">
+                      <th>Comedian</th>
+                      <th>Links</th>
+                      <th>Nights</th>
+                      <th>Answers</th>
+                      <th>Sent</th>
+                      <th>Status</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {paginated.map((sub, i) => {
-                      const handle = normalizeInstagram(sub.instagram);
-                      const igHref = instagramUrl(sub.instagram);
-                      const videoHref = toHttpUrl(sub.video_url);
-
-                      return (
-                        <tr
-                          key={sub.id}
-                          className={`border-b border-[#1a1a1a] align-top transition hover:bg-[#141414] ${
-                            i % 2 === 0 ? 'bg-[#0d0d0d]' : 'bg-[#0a0a0a]'
-                          }`}
-                        >
-                          {/* Identity — avatar, name, status and where they are, in one cell. */}
-                          <td className="px-4 py-3">
-                            <div className="flex items-start gap-3">
-                              <Avatar sub={sub} className="h-10 w-10 text-xs" />
-                              <div className="min-w-0">
-                                <p className="font-medium text-white">{sub.name}</p>
-                                <p className="mt-0.5 truncate text-[11px] text-[#555]">
-                                  #{sub.id}
-                                  {sub.location ? ` · ${sub.location}` : ''}
-                                </p>
-                                <div className="mt-1.5">
-                                  <StatusBadge status={sub.status} />
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-
-                          <td className="max-w-[200px] px-4 py-3 text-xs">
-                            <div className="flex flex-col gap-1">
-                              {sub.email ? (
-                                <a
-                                  href={`mailto:${sub.email}`}
-                                  className="truncate text-[#DC143C] hover:underline"
-                                  title={sub.email}
-                                >
-                                  {sub.email}
-                                </a>
-                              ) : null}
-                              {igHref ? (
-                                <a
-                                  href={igHref}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="truncate text-[#aaa] hover:text-[#DC143C] hover:underline"
-                                >
-                                  @{handle}
-                                </a>
-                              ) : handle ? (
-                                <span className="truncate text-[#888]">{handle}</span>
-                              ) : null}
-                              {!sub.email && !handle ? (
-                                <span className="text-[#333]">—</span>
-                              ) : null}
-                            </div>
-                          </td>
-
-                          <td className="px-4 py-3">
-                            {videoHref ? (
-                              <a
-                                href={videoHref}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 rounded bg-[#1a1a1a] px-2 py-1 text-xs text-[#DC143C] transition hover:bg-[#2a2a2a]"
-                              >
-                                ▶ Watch
-                              </a>
-                            ) : sub.video_url ? (
-                              <span
-                                className="block max-w-[140px] truncate text-xs text-[#888]"
-                                title={sub.video_url}
-                              >
-                                {sub.video_url}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-[#333]">—</span>
-                            )}
-                          </td>
-
-                          <td className="w-[230px] px-4 py-3">
-                            {sub.status === 'booked' ? (
-                              <BookedNightPicker sub={sub} nights={nights} />
-                            ) : (
-                              <AvailabilityChips sub={sub} nights={nights} />
-                            )}
-                          </td>
-
-                          <td className="max-w-[140px] px-4 py-3">
-                            <FlagBadges sub={sub} />
-                          </td>
-
-                          {/* Never clamped — a half-shown question is one you
-                              have to hover to answer. */}
-                          <td className="w-[300px] min-w-[260px] px-4 py-3">
-                            {sub.questions ? (
-                              <span className="block text-xs leading-relaxed break-words whitespace-pre-wrap text-[#bbb]">
-                                {sub.questions}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-[#333]">—</span>
-                            )}
-                          </td>
-
-                          <td className="px-4 py-3 text-xs whitespace-nowrap text-[#555]">
-                            <span title={formatDateTime(sub.submitted_at)}>
-                              {formatDate(sub.submitted_at)}
-                            </span>
-                          </td>
-
-                          <td className="w-56 px-4 py-3">
-                            <RowForm sub={sub} onStatusSaved={handleStatusSaved}>
-                              <DeleteForm sub={sub} />
-                            </RowForm>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
+                  {paginated.map((sub) => (
+                    <SubmissionRow
+                      key={sub.id}
+                      sub={sub}
+                      nights={nights}
+                      onStatusSaved={handleStatusSaved}
+                    />
+                  ))}
                 </table>
               </div>
 

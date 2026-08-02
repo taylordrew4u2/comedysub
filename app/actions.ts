@@ -10,10 +10,13 @@ import {
   getSubmission,
   insertSubmission,
   insertTemplate,
+  isSubmissionStatus,
   setAgreement,
   setBookedDates,
-  updateSubmission,
+  setNotes,
+  setStatus,
   updateTemplate,
+  type SubmissionStatus,
 } from './lib/db';
 import { normalizeInstagram, toHttpUrl } from './lib/normalize';
 
@@ -165,37 +168,68 @@ export async function adminLogout(): Promise<void> {
   redirect('/admin');
 }
 
-// ── Admin Update Submission ────────────────────────────────────────────────────
+// ── Admin Status ───────────────────────────────────────────────────────────────
+
+export interface StatusState {
+  error?: string;
+  /** What the server stored, so the caller can settle on it. */
+  status?: SubmissionStatus;
+}
+
+/**
+ * Moving someone along the pipeline is a single choice, so it saves on the spot
+ * rather than behind a Save button — same direct-call shape as the night chips.
+ */
+export async function setStatusAction(id: number, status: unknown): Promise<StatusState> {
+  if (!(await isAdmin())) {
+    return { error: 'Unauthorized' };
+  }
+  if (!Number.isInteger(id) || !isSubmissionStatus(status)) {
+    return { error: 'Missing submission id or status.' };
+  }
+
+  try {
+    const saved = await setStatus(id, status);
+    if (!saved) return { error: 'That submission no longer exists.' };
+    revalidatePath('/admin');
+    revalidatePath('/admin/lineup');
+    return { status };
+  } catch (err) {
+    console.error('Status update failed:', err);
+    return { error: 'Failed to save the status.' };
+  }
+}
+
+// ── Admin Notes ────────────────────────────────────────────────────────────────
 
 export interface UpdateState {
   error?: string;
   success?: boolean;
 }
 
-export async function updateSubmissionAction(
+export async function saveNotesAction(
   prevState: UpdateState,
   formData: FormData,
 ): Promise<UpdateState> {
-  const cookieStore = await cookies();
-  if (cookieStore.get('admin_auth')?.value !== 'true') {
+  if (!(await isAdmin())) {
     return { error: 'Unauthorized' };
   }
 
   const id = parseInt(formData.get('id') as string, 10);
-  const status = formData.get('status') as string;
   const admin_notes = (formData.get('admin_notes') as string) ?? '';
 
-  if (!id || !status) {
-    return { error: 'Missing required fields.' };
+  if (!Number.isInteger(id)) {
+    return { error: 'Missing submission id.' };
   }
 
   try {
-    await updateSubmission(id, status, admin_notes);
+    const saved = await setNotes(id, admin_notes);
+    if (!saved) return { error: 'That submission no longer exists.' };
     revalidatePath('/admin');
     return { success: true };
   } catch (err) {
-    console.error('Update error:', err);
-    return { error: 'Failed to update submission.' };
+    console.error('Notes update failed:', err);
+    return { error: 'Failed to save the notes.' };
   }
 }
 

@@ -1,11 +1,19 @@
 import { sql } from '@vercel/postgres';
 
-export type SubmissionStatus =
-  | 'new'
-  | 'reviewed'
-  | 'contacted'
-  | 'booked'
-  | 'declined';
+/** Pipeline order — the dashboard groups by it, the server validates against it. */
+export const SUBMISSION_STATUSES = [
+  'new',
+  'reviewed',
+  'contacted',
+  'booked',
+  'declined',
+] as const;
+
+export type SubmissionStatus = (typeof SUBMISSION_STATUSES)[number];
+
+export function isSubmissionStatus(value: unknown): value is SubmissionStatus {
+  return SUBMISSION_STATUSES.includes(value as SubmissionStatus);
+}
 
 export interface Submission {
   id: number;
@@ -128,14 +136,19 @@ export async function setBookedDates(id: number, dates: string): Promise<void> {
   await sql`UPDATE submissions SET booked_dates = ${dates} WHERE id = ${id}`;
 }
 
-export async function updateSubmission(
-  id: number,
-  status: string,
-  admin_notes: string,
-): Promise<void> {
-  await sql`
-    UPDATE submissions SET status = ${status}, admin_notes = ${admin_notes} WHERE id = ${id}
+/* Status and notes save separately: the status is a one-tap pill, the notes are
+ * a deliberate write. Both report whether the row was still there. */
+
+export async function setStatus(id: number, status: SubmissionStatus): Promise<boolean> {
+  const { rowCount } = await sql`UPDATE submissions SET status = ${status} WHERE id = ${id}`;
+  return (rowCount ?? 0) > 0;
+}
+
+export async function setNotes(id: number, admin_notes: string): Promise<boolean> {
+  const { rowCount } = await sql`
+    UPDATE submissions SET admin_notes = ${admin_notes} WHERE id = ${id}
   `;
+  return (rowCount ?? 0) > 0;
 }
 
 /** Returns the deleted row so the caller can clean up its headshot blob. */
