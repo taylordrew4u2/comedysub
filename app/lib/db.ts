@@ -14,6 +14,9 @@ export interface Submission {
   instagram: string | null;
   location: string | null;
   availability: string;
+  /** The nights they're actually on, picked by the admin once they're booked.
+   *  Always a subset of `availability`, in the same comma-separated format. */
+  booked_dates: string | null;
   video_url: string | null;
   headshot_url: string | null;
   source: 'web';
@@ -45,6 +48,7 @@ async function ensureTable(): Promise<void> {
       instagram     TEXT,
       location      TEXT,
       availability  TEXT        NOT NULL DEFAULT '',
+      booked_dates  TEXT,
       video_url     TEXT,
       headshot_url  TEXT,
       source        TEXT        NOT NULL DEFAULT 'web',
@@ -64,6 +68,7 @@ async function ensureTable(): Promise<void> {
   await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS has_tattoos BOOLEAN`;
   await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS questions TEXT`;
   await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS multiple_shows BOOLEAN`;
+  await sql`ALTER TABLE submissions ADD COLUMN IF NOT EXISTS booked_dates TEXT`;
 }
 
 export async function insertSubmission(data: {
@@ -109,6 +114,18 @@ export async function setAgreement(id: number, agreed: boolean): Promise<void> {
     UPDATE submissions SET agreed_bring_two = ${agreed}
     WHERE id = ${id} AND agreed_bring_two IS NULL
   `;
+}
+
+export async function getSubmission(id: number): Promise<Submission | null> {
+  await ensureTable();
+  const { rows } = await sql`SELECT * FROM submissions WHERE id = ${id}`;
+  return (rows[0] as unknown as Submission) ?? null;
+}
+
+/** Writes the nights an already-booked comedian is on. Validated by the caller
+ *  against their availability, so this stores whatever it is given. */
+export async function setBookedDates(id: number, dates: string): Promise<void> {
+  await sql`UPDATE submissions SET booked_dates = ${dates} WHERE id = ${id}`;
 }
 
 export async function updateSubmission(

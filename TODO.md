@@ -19,6 +19,7 @@
 - [x] Admin polish — sort order, "/" to search, denser desktop table, notes no longer lost when a save fails
 - [x] Write and store reusable email templates in the admin (`/admin/templates`)
 - [x] Split the admin into Applicants and Booked tabs — booking someone moves them across
+- [x] Pick which nights a booked comedian is on, and flag dates that already have a comic
 
 ## Up Next
 - [ ] Send confirmation email to comedian on submission
