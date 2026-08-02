@@ -43,8 +43,8 @@ export default function HomePage() {
             <p className="max-w-md text-base leading-relaxed text-[#888]">
               We&apos;re booking Scottish stand-up comedians for Pins &amp; Needles —
               a late-night show at The Raging Bull, Edinburgh Fringe.
-              Submit your set video and we&apos;ll message you on Instagram if you&apos;re
-              selected — so keep an eye on your DMs.
+              Submit your set video and we&apos;ll message you on Instagram or by email
+              if you&apos;re selected — so keep an eye on both.
             </p>
 
             {isOpen && (
