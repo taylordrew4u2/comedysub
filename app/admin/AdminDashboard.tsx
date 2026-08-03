@@ -570,6 +570,16 @@ function SubmissionCard({
                 "Contacted" doesn't come out as "Contact". */}
             <StatusPill sub={sub} onSaved={onStatusSaved} className="shrink-0" />
           </div>
+          {/* Directly under the name, for the same reason as the table. */}
+          {sub.email && (
+            <a
+              href={`mailto:${sub.email}`}
+              className="mt-0.5 block truncate text-xs text-[#DC143C] hover:underline"
+              title={sub.email}
+            >
+              {sub.email}
+            </a>
+          )}
           <p className="mt-0.5 truncate text-xs text-[#555]">
             #{sub.id} · <span title={formatDateTime(sub.submitted_at)}>{formatDate(sub.submitted_at)}</span>
             {sub.location ? ` · ${sub.location}` : ''}
@@ -608,6 +618,8 @@ function SubmissionCard({
             <span className="truncate">Email</span>
           </a>
         )}
+        {/* The address above is for reading and copying; this is the tap target
+            that opens a mail app, which is a different job on a phone. */}
         {igHref ? (
           <a
             href={igHref}
@@ -699,10 +711,23 @@ function SubmissionRow({
         <td className="px-3 py-3">
           <div className="flex items-start gap-2.5">
             <Avatar sub={sub} className="h-9 w-9 text-xs" />
+            {/* Name and email sit on consecutive lines: it's the pair you copy
+                together, and a column between them made that a two-step job. */}
             <div className="min-w-0">
               <p className="truncate font-medium text-white" title={sub.name}>
                 {sub.name}
               </p>
+              {sub.email ? (
+                <a
+                  href={`mailto:${sub.email}`}
+                  className="mt-0.5 block truncate text-[11px] text-[#DC143C] hover:underline"
+                  title={sub.email}
+                >
+                  {sub.email}
+                </a>
+              ) : (
+                <p className="mt-0.5 text-[11px] text-[#333]">no email</p>
+              )}
               <p className="mt-0.5 truncate text-[11px] text-[#555]">
                 #{sub.id}
                 {sub.location ? ` · ${sub.location}` : ''}
@@ -711,7 +736,7 @@ function SubmissionRow({
           </div>
         </td>
 
-        {/* Everything you'd click to find out more about them, in one place. */}
+        {/* What's left to click once the email has moved up beside the name. */}
         <td className="px-3 py-3 text-xs">
           <div className="flex flex-col items-start gap-1">
             {videoHref ? (
@@ -728,15 +753,6 @@ function SubmissionRow({
                 {sub.video_url}
               </span>
             ) : null}
-            {sub.email ? (
-              <a
-                href={`mailto:${sub.email}`}
-                className="block max-w-full truncate text-[#aaa] hover:text-[#DC143C] hover:underline"
-                title={sub.email}
-              >
-                {sub.email}
-              </a>
-            ) : null}
             {igHref ? (
               <a
                 href={igHref}
@@ -749,7 +765,7 @@ function SubmissionRow({
             ) : handle ? (
               <span className="block max-w-full truncate text-[#888]">{handle}</span>
             ) : null}
-            {!videoHref && !sub.video_url && !sub.email && !handle ? (
+            {!videoHref && !sub.video_url && !handle ? (
               <span className="text-[#333]">—</span>
             ) : null}
           </div>
@@ -1275,8 +1291,8 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
               <div className="hidden rounded-xl border border-[#1e1e1e] lg:block">
                 <table className="w-full table-fixed text-sm">
                   <colgroup>
-                    <col className="w-[24%]" />
-                    <col className="w-[18%]" />
+                    <col className="w-[30%]" />
+                    <col className="w-[12%]" />
                     <col className="w-[22%]" />
                     <col className="w-[12%]" />
                     <col className="w-[8%]" />
