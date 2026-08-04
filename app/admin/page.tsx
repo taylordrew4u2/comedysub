@@ -1,7 +1,14 @@
 import { cookies } from 'next/headers';
+import type { Metadata } from 'next';
 import { getClosedNights, getSubmissions, type Submission } from '../lib/db';
 import LoginForm from './LoginForm';
 import AdminDashboard from './AdminDashboard';
+
+// The other admin pages name themselves; this one used to inherit the public
+// page's title, so every open tab read the same thing.
+export const metadata: Metadata = {
+  title: 'Pins & Needles — Admin',
+};
 
 // Admin page — protected by simple cookie auth.
 // Cookie is set by the adminLogin Server Action in app/actions.ts.

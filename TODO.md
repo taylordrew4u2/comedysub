@@ -25,6 +25,8 @@
 - [x] Submission form says what's missing per field, and shrinks big headshots itself
 - [x] Open and close show nights from the admin — closed nights leave the public form
 - [x] Booked contacts list (names + emails), with each comedian's nights behind a toggle
+- [x] Print the lineup grouped by night, so the door reads one night at a time
+- [x] Template editor asks before throwing away unsaved changes
 
 ## Up Next
 - [ ] Send confirmation email to comedian on submission
