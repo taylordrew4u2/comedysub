@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useActionState, useRef, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import {
   deleteTemplateAction,
   saveTemplateAction,
@@ -44,15 +44,41 @@ export default function TemplateManager({
   // Bumped so "New template" clears an editor that is already on a blank one.
   const [blankCount, setBlankCount] = useState(0);
 
+  /*
+   * Switching template throws the editor away and builds a new one, which used
+   * to take any unsaved edit with it silently. The editor reports whether it's
+   * dirty, and a pending switch waits here until the question is answered.
+   */
+  const [dirty, setDirty] = useState(false);
+  const [pending, setPending] = useState<(() => void) | null>(null);
+
   // A deleted template drops out of the list, which leaves this null and the
   // editor back on a blank form without any extra bookkeeping.
   const selected = selectedId === null ? null : (templates.find((t) => t.id === selectedId) ?? null);
   const editorKey = selected ? `t${selected.id}` : `new-${blankCount}`;
 
+  /** Runs `move` now, or parks it behind a confirmation if work would be lost. */
+  function guard(move: () => void) {
+    if (!dirty) {
+      move();
+      return;
+    }
+    setPending(() => move);
+  }
+
+  function discardAndGo() {
+    const move = pending;
+    setPending(null);
+    setDirty(false);
+    move?.();
+  }
+
   function startBlank(seed: (typeof STARTER_TEMPLATES)[number] | null = null) {
-    setStarter(seed);
-    setSelectedId(null);
-    setBlankCount((n) => n + 1);
+    guard(() => {
+      setStarter(seed);
+      setSelectedId(null);
+      setBlankCount((n) => n + 1);
+    });
   }
 
   return (
@@ -110,7 +136,7 @@ export default function TemplateManager({
                       <li key={t.id}>
                         <button
                           type="button"
-                          onClick={() => setSelectedId(t.id)}
+                          onClick={() => guard(() => setSelectedId(t.id))}
                           aria-pressed={active}
                           className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
                             active
@@ -152,11 +178,37 @@ export default function TemplateManager({
 
             {/* ── Editor + preview ── */}
             <div className="min-w-0 flex-1">
+              {pending && (
+                <div
+                  role="alertdialog"
+                  aria-label="Unsaved changes"
+                  className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-[#DC143C]/40 bg-[#DC143C]/10 px-4 py-3"
+                >
+                  <p className="min-w-0 flex-1 text-sm text-[#f0aebc]">
+                    You have unsaved changes to this template.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setPending(null)}
+                    className="min-h-11 rounded-lg bg-[#DC143C] px-3 text-xs font-semibold whitespace-nowrap text-white transition hover:bg-[#b01030] sm:min-h-0 sm:py-1.5"
+                  >
+                    Keep editing
+                  </button>
+                  <button
+                    type="button"
+                    onClick={discardAndGo}
+                    className="min-h-11 rounded-lg border border-[#2a2a2a] px-3 text-xs font-semibold whitespace-nowrap text-[#888] transition hover:text-white sm:min-h-0 sm:py-1.5"
+                  >
+                    Discard and switch
+                  </button>
+                </div>
+              )}
               <TemplateEditor
                 key={editorKey}
                 template={selected}
                 starter={selected ? null : starter}
                 submissions={submissions}
+                onDirtyChange={setDirty}
               />
             </div>
           </div>
@@ -170,10 +222,13 @@ function TemplateEditor({
   template,
   starter,
   submissions,
+  onDirtyChange,
 }: {
   template: EmailTemplate | null;
   starter: (typeof STARTER_TEMPLATES)[number] | null;
   submissions: Submission[];
+  /** Lets the list above ask before throwing this editor away. */
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const initial: TemplateState = {};
   const [saveState, saveAction, isSaving] = useActionState(saveTemplateAction, initial);
@@ -181,6 +236,32 @@ function TemplateEditor({
   const [name, setName] = useState(template?.name ?? starter?.name ?? '');
   const [subject, setSubject] = useState(template?.subject ?? starter?.subject ?? '');
   const [body, setBody] = useState(template?.body ?? starter?.body ?? '');
+
+  /*
+   * "Unsaved" is measured against what the server last accepted — a starter
+   * counts as unsaved work, since nothing has been written down yet.
+   */
+  const [lastSaved, setLastSaved] = useState({
+    name: template?.name ?? '',
+    subject: template?.subject ?? '',
+    body: template?.body ?? '',
+  });
+  const sent = useRef({ name, subject, body });
+  const acked = useRef<TemplateState | null>(null);
+
+  const dirty =
+    name !== lastSaved.name || subject !== lastSaved.subject || body !== lastSaved.body;
+
+  useEffect(() => {
+    if (saveState.success && acked.current !== saveState) {
+      acked.current = saveState;
+      setLastSaved(sent.current);
+    }
+  }, [saveState]);
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   const subjectRef = useRef<HTMLInputElement>(null);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
@@ -241,7 +322,12 @@ function TemplateEditor({
   return (
     <div className="flex flex-col gap-4">
       <div className="rounded-xl border border-[#1e1e1e] bg-[#111] p-4 sm:p-5">
-      <form action={saveAction}>
+      <form
+        action={(formData) => {
+          sent.current = { name, subject, body };
+          saveAction(formData);
+        }}
+      >
         {id !== null && <input type="hidden" name="id" value={id} />}
 
         <div className="flex flex-col gap-4 sm:flex-row">
@@ -322,7 +408,13 @@ function TemplateEditor({
             disabled={isSaving}
             className="min-h-12 w-full rounded-xl bg-[#DC143C] px-5 text-sm font-bold text-white transition hover:bg-[#b01030] disabled:opacity-60 sm:min-h-0 sm:w-auto sm:py-2.5"
           >
-            {isSaving ? 'Saving…' : id !== null ? 'Save changes' : 'Save template'}
+            {isSaving
+              ? 'Saving…'
+              : !dirty && id !== null
+                ? '✓ Saved'
+                : id !== null
+                  ? 'Save changes'
+                  : 'Save template'}
           </button>
         </div>
 
