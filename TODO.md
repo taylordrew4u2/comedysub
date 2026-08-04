@@ -23,6 +23,8 @@
 - [x] Admin table fits the screen — no sideways scrolling, one-tap status, notes fold away
 - [x] Hide declined comedians from the working list, behind the Declined card
 - [x] Submission form says what's missing per field, and shrinks big headshots itself
+- [x] Open and close show nights from the admin — closed nights leave the public form
+- [x] Booked contacts list (names + emails), with each comedian's nights behind a toggle
 
 ## Up Next
 - [ ] Send confirmation email to comedian on submission

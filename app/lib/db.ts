@@ -157,6 +157,45 @@ export async function deleteSubmission(id: number): Promise<Submission | null> {
   return (rows[0] as unknown as Submission) ?? null;
 }
 
+// ── Show settings ──────────────────────────────────────────────────────────────
+
+/** Same first-use pattern as everything else — no migration step. */
+async function ensureSettingsTable(): Promise<void> {
+  await sql`
+    CREATE TABLE IF NOT EXISTS show_settings (
+      key   TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `;
+}
+
+const CLOSED_NIGHTS_KEY = 'closed_nights';
+
+/**
+ * The nights that are shut to new applicants, comma-separated.
+ *
+ * Stored as *closed* rather than open so an empty table means "everything is
+ * open" — the behaviour before this existed, and no seeding to get there.
+ */
+export async function getClosedNights(): Promise<string[]> {
+  await ensureSettingsTable();
+  const { rows } = await sql`SELECT value FROM show_settings WHERE key = ${CLOSED_NIGHTS_KEY}`;
+  const value = (rows[0] as { value?: string } | undefined)?.value ?? '';
+  return value
+    .split(',')
+    .map((n) => n.trim())
+    .filter(Boolean);
+}
+
+export async function setClosedNights(nights: string[]): Promise<void> {
+  await ensureSettingsTable();
+  await sql`
+    INSERT INTO show_settings (key, value)
+    VALUES (${CLOSED_NIGHTS_KEY}, ${nights.join(', ')})
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+  `;
+}
+
 // ── Email templates ────────────────────────────────────────────────────────────
 
 /** Same first-use pattern as the submissions table — no migration step. */

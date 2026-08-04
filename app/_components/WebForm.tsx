@@ -3,6 +3,7 @@
 import { useActionState, useCallback, useEffect, useRef, useState } from 'react';
 import { recordAgreement, submitWebForm, type SubmitState } from '../actions';
 import { instagramUrl, toHttpUrl } from '../lib/normalize';
+import { nightParts } from '../lib/nights';
 
 const initial: SubmitState = {};
 
@@ -13,7 +14,6 @@ const okClass = 'border-[#2a2a2a] focus:border-[#DC143C] focus:ring-[#DC143C]/50
 const badClass = 'border-red-500/70 focus:border-red-500 focus:ring-red-500/50';
 const labelClass = 'block mb-1.5 text-xs font-semibold text-[#666] uppercase tracking-wider';
 
-const AUG_DATES = Array.from({ length: 13 }, (_, i) => i + 6);
 const MAX_HEADSHOT_BYTES = 8 * 1024 * 1024;
 /** Anything wider than this is shrunk before upload — see prepareHeadshot. */
 const MAX_HEADSHOT_EDGE = 1400;
@@ -67,7 +67,7 @@ const FIELD_ORDER: FieldKey[] = [
   'headshot',
 ];
 
-function validate(fields: Fields, availability: number[], headshot: File | null): Problems {
+function validate(fields: Fields, availability: string[], headshot: File | null): Problems {
   const problems: Problems = {};
 
   if (!fields.name.trim()) problems.name = 'Tell us your name.';
@@ -138,7 +138,15 @@ async function prepareHeadshot(file: File): Promise<File> {
 // they've typed so coming back doesn't mean starting over.
 const DRAFT_KEY = 'pins-needles-draft-v1';
 
-type Draft = { fields: Partial<Fields>; availability: number[] };
+type Draft = { fields: Partial<Fields>; availability: string[] };
+
+/** Drafts written when the picker dealt in day numbers rather than labels. */
+function draftNights(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((v) => (typeof v === 'number' ? `Aug ${v}` : v))
+    .filter((v): v is string => typeof v === 'string');
+}
 
 function readDraft(): Draft | null {
   try {
@@ -151,7 +159,7 @@ function readDraft(): Draft | null {
     if (!fields.multiple_shows && parsed.multipleShows) fields.multiple_shows = parsed.multipleShows;
     return {
       fields,
-      availability: Array.isArray(parsed.availability) ? parsed.availability : [],
+      availability: draftNights(parsed.availability),
     };
   } catch {
     // Private browsing, disabled storage, or corrupt JSON — drafts are a bonus.
@@ -266,24 +274,26 @@ function AgreementModal({
 }
 
 function AvailabilityPicker({
+  nights,
   selected,
   setSelected,
   error,
   groupRef,
 }: {
-  selected: number[];
-  setSelected: (next: number[]) => void;
+  /** Only the nights still open — the admin can shut one at any time. */
+  nights: string[];
+  selected: string[];
+  setSelected: (next: string[]) => void;
   error?: string;
   groupRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const allSelected = selected.length === AUG_DATES.length;
+  const allSelected = selected.length === nights.length;
 
-  function toggle(day: number) {
-    setSelected(
-      selected.includes(day)
-        ? selected.filter((d) => d !== day)
-        : [...selected, day],
-    );
+  function toggle(night: string) {
+    // Kept in show order however they were tapped.
+    const wanted = new Set(selected);
+    if (!wanted.delete(night)) wanted.add(night);
+    setSelected(nights.filter((n) => wanted.has(n)));
   }
 
   return (
@@ -304,7 +314,7 @@ function AvailabilityPicker({
           {!allSelected && (
             <button
               type="button"
-              onClick={() => setSelected([...AUG_DATES])}
+              onClick={() => setSelected([...nights])}
               className="px-1 py-2 text-xs font-semibold text-[#DC143C] underline underline-offset-4 transition hover:text-white"
             >
               Select all
@@ -315,7 +325,11 @@ function AvailabilityPicker({
       <p className="mb-2.5 text-xs text-[#555]">
         {selected.length > 0
           ? `${selected.length} date${selected.length === 1 ? '' : 's'} selected`
-          : 'Tap the nights you can perform (Aug 6–18).'}
+          : // The range is read off the open nights: a full night is taken out of
+            // the list, and the hint would otherwise still promise it.
+            `Tap the nights you can perform${
+              nights.length ? ` (${nights[0]}–${nights[nights.length - 1].replace(/^\D+/, '')})` : ''
+            }.`}
       </p>
 
       <div
@@ -326,14 +340,16 @@ function AvailabilityPicker({
         aria-label="Available dates in August"
         aria-describedby={error ? 'availability-error' : undefined}
       >
-        {AUG_DATES.map((d) => (
-          <label key={d} className="cursor-pointer">
+        {nights.map((night) => {
+          const { month, day } = nightParts(night);
+          return (
+          <label key={night} className="cursor-pointer">
             <input
               type="checkbox"
               name="availability"
-              value={`Aug ${d}`}
-              checked={selected.includes(d)}
-              onChange={() => toggle(d)}
+              value={night}
+              checked={selected.includes(night)}
+              onChange={() => toggle(night)}
               className="peer sr-only"
             />
             <span
@@ -343,11 +359,14 @@ function AvailabilityPicker({
                 error ? 'border-red-500/40' : 'border-[#2a2a2a]'
               }`}
             >
-              <span className="text-[9px] uppercase tracking-wider opacity-60">Aug</span>
-              {d}
+              {month && (
+                <span className="text-[9px] uppercase tracking-wider opacity-60">{month}</span>
+              )}
+              {day}
             </span>
           </label>
-        ))}
+          );
+        })}
       </div>
       <FieldError id="availability-error" message={error} />
     </div>
@@ -529,11 +548,11 @@ function HeadshotField({
   );
 }
 
-export default function WebForm() {
+export default function WebForm({ nights }: { nights: string[] }) {
   const [state, formAction, isPending] = useActionState(submitWebForm, initial);
   const [agreement, setAgreement] = useState<'agreed' | 'declined' | null>(null);
   const [fields, setFields] = useState<Fields>(EMPTY);
-  const [availability, setAvailability] = useState<number[]>([]);
+  const [availability, setAvailability] = useState<string[]>([]);
   const [headshot, setHeadshot] = useState<File | null>(null);
   const [problems, setProblems] = useState<Problems>({});
   const [draftRestored, setDraftRestored] = useState(false);
@@ -553,13 +572,16 @@ export default function WebForm() {
    * mount is the case the set-state-in-effect rule exempts — it costs one
    * extra render, once, and only when a draft exists.
    */
-  /* eslint-disable react-hooks/set-state-in-effect */
+  /* Restoring happens once, against the nights on offer at the time; re-running
+     it because a night closed would fight whatever they've picked since. */
+  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
   useEffect(() => {
     const draft = readDraft();
     hydrated.current = true;
     if (!draft) return;
 
-    const days = draft.availability.filter((d) => AUG_DATES.includes(d));
+    // A night that has closed since they started is quietly dropped.
+    const days = draft.availability.filter((d) => nights.includes(d));
     const restored: Fields = { ...EMPTY };
     let found = days.length > 0;
 
@@ -584,7 +606,7 @@ export default function WebForm() {
     setFields(restored);
     setDraftRestored(true);
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 
   const saveDraft = useCallback(() => {
     if (!hydrated.current) return;
@@ -855,6 +877,7 @@ export default function WebForm() {
       </div>
 
       <AvailabilityPicker
+        nights={nights}
         selected={availability}
         setSelected={(next) => {
           setAvailability(next);
