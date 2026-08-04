@@ -15,6 +15,7 @@ import {
   deleteSubmissionAction,
   saveNotesAction,
   setBookedDatesAction,
+  setClosedNightsAction,
   setStatusAction,
   type DeleteState,
   type UpdateState,
@@ -25,6 +26,7 @@ import {
   type SubmissionStatus,
 } from '../lib/db';
 import { instagramUrl, normalizeInstagram, toHttpUrl } from '../lib/normalize';
+import { SHOW_NIGHTS, splitNights } from '../lib/nights';
 
 const STATUS_OPTIONS: readonly SubmissionStatus[] = SUBMISSION_STATUSES;
 
@@ -178,34 +180,19 @@ const NIGHT_ON = 'bg-green-500/25 text-green-200 ring-1 ring-green-500/50';
 
 type NightIndex = Map<string, Submission[]>;
 
-function splitDates(value: string | null): string[] {
-  return (value ?? '')
-    .split(',')
-    .map((d) => d.trim())
-    .filter(Boolean);
-}
-
 /** Every night someone is booked on, with who. Only booked rows count — an
  *  applicant's dates are an offer, and un-booking someone frees their night. */
 function buildNights(submissions: Submission[]): NightIndex {
   const nights: NightIndex = new Map();
   submissions.forEach((sub) => {
     if (sub.status !== 'booked') return;
-    splitDates(sub.booked_dates).forEach((date) => {
+    splitNights(sub.booked_dates).forEach((date) => {
       const on = nights.get(date);
       if (on) on.push(sub);
       else nights.set(date, [sub]);
     });
   });
   return nights;
-}
-
-/** "Aug 6" sorts before "Aug 13" — by the day, not by the string. */
-function byNight(a: string, b: string): number {
-  const dayA = parseInt(a.replace(/\D+/g, ''), 10);
-  const dayB = parseInt(b.replace(/\D+/g, ''), 10);
-  if (Number.isNaN(dayA) || Number.isNaN(dayB) || dayA === dayB) return a.localeCompare(b);
-  return dayA - dayB;
 }
 
 /** Who else is on that night — a comedian isn't a clash with themselves. */
@@ -220,7 +207,7 @@ function nightTitle(date: string, others: Submission[]): string | undefined {
 
 /** Read-only dates — what an applicant offered, coloured by what's taken. */
 function AvailabilityChips({ sub, nights }: { sub: Submission; nights: NightIndex }) {
-  const dates = splitDates(sub.availability);
+  const dates = splitNights(sub.availability);
   if (!dates.length) return <span className="text-xs text-[#333]">—</span>;
 
   return (
@@ -249,8 +236,8 @@ function AvailabilityChips({ sub, nights }: { sub: Submission; nights: NightInde
  * trip; a rejected save puts it back and says why.
  */
 function BookedNightPicker({ sub, nights }: { sub: Submission; nights: NightIndex }) {
-  const dates = useMemo(() => splitDates(sub.availability), [sub.availability]);
-  const [selected, setSelected] = useState<string[]>(() => splitDates(sub.booked_dates));
+  const dates = useMemo(() => splitNights(sub.availability), [sub.availability]);
+  const [selected, setSelected] = useState<string[]>(() => splitNights(sub.booked_dates));
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -317,31 +304,205 @@ function BookedNightPicker({ sub, nights }: { sub: Submission; nights: NightInde
   );
 }
 
-/** Which nights already have someone on them, above both lists. */
-function NightsBar({ nights }: { nights: NightIndex }) {
-  const booked = [...nights.entries()].sort((a, b) => byNight(a[0], b[0]));
-  if (!booked.length) return null;
+/**
+ * Every night of the run: who's on it, and whether it's still taking
+ * applications. Tapping a night closes it — the form stops offering it, and
+ * anyone whose page was already open has the choice rejected on submit.
+ *
+ * Closing is a live change to the public form, so it saves on the tap and puts
+ * itself back if the server says no; there's no Save button to forget.
+ */
+function ShowNightsPanel({
+  nights,
+  closed,
+}: {
+  nights: NightIndex;
+  closed: string[];
+}) {
+  const [shut, setShut] = useState<string[]>(closed);
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function toggle(night: string) {
+    const wanted = new Set(shut);
+    if (!wanted.delete(night)) wanted.add(night);
+    const next = SHOW_NIGHTS.filter((n) => wanted.has(n));
+    const previous = shut;
+
+    setShut(next);
+    setError(null);
+    startTransition(async () => {
+      const result = await setClosedNightsAction(next);
+      if (result.error) {
+        setError(result.error);
+        setShut(previous);
+      } else if (result.closed) {
+        setShut(result.closed);
+      }
+    });
+  }
+
+  const openCount = SHOW_NIGHTS.length - shut.length;
 
   return (
     <div className="mb-6 rounded-xl border border-[#1e1e1e] bg-[#111] px-4 py-3">
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[#555]">
-        Nights with a comic on
-      </p>
-      <div className="flex flex-wrap gap-1.5">
-        {booked.map(([date, subs]) => (
-          <span
-            key={date}
-            title={subs.map((s) => s.name).join(', ')}
-            className={`${NIGHT_CHIP} ${NIGHT_TAKEN} px-2 py-1`}
-          >
-            {date} · {subs.length}
-          </span>
-        ))}
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-[#555]">
+          Show nights
+        </p>
+        <p className="text-[11px] text-[#666]">
+          {openCount} open{shut.length > 0 ? ` · ${shut.length} closed to new applicants` : ''}
+        </p>
       </div>
-      <p className="mt-2 text-[11px] leading-snug text-[#666]">
-        Amber marks a night that already has someone on it — still open, just no longer empty.
+
+      <div className="flex flex-wrap gap-1.5">
+        {SHOW_NIGHTS.map((night) => {
+          const on = nights.get(night) ?? [];
+          const isShut = shut.includes(night);
+          return (
+            <button
+              key={night}
+              type="button"
+              aria-pressed={!isShut}
+              disabled={isPending}
+              onClick={() => toggle(night)}
+              title={
+                isShut
+                  ? `${night} is closed — tap to reopen it`
+                  : `${night}${on.length ? `: ${on.map((s) => s.name).join(', ')}` : ''} — tap to close it to new applicants`
+              }
+              className={`${NIGHT_CHIP} flex min-h-11 items-center px-2.5 transition hover:ring-1 hover:ring-[#DC143C] disabled:opacity-60 lg:min-h-8 ${
+                isShut
+                  ? 'bg-[#141414] text-[#555] line-through ring-1 ring-[#2a2a2a]'
+                  : on.length
+                    ? NIGHT_TAKEN
+                    : NIGHT_FREE
+              }`}
+            >
+              {night}
+              {on.length ? ` · ${on.length}` : ''}
+            </button>
+          );
+        })}
+      </div>
+
+      <p
+        role="status"
+        aria-live="polite"
+        className={`mt-2 text-[11px] leading-snug ${error ? 'text-red-400' : 'text-[#666]'}`}
+      >
+        {error ??
+          'Tap a night to close it to new applicants — it disappears from the form. Amber means someone is already on it; it stays open either way.'}
       </p>
     </div>
+  );
+}
+
+/**
+ * Every booked comedian's name and email, and nothing else until you ask.
+ *
+ * It's the list you work from when you're writing to the lineup, so it stays
+ * one line per person: the nights are a row you open, not a column that pushes
+ * the addresses out of a clean copy-paste.
+ */
+function BookedContacts({ booked }: { booked: Submission[] }) {
+  const [openId, setOpenId] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const withEmail = booked.filter((s) => s.email);
+
+  async function copyAll() {
+    const text = withEmail.map((s) => `${s.name} <${s.email}>`).join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard blocked (insecure origin, denied permission) — the list is
+      // right there to select by hand, so this isn't worth an error message.
+    }
+  }
+
+  if (!booked.length) return null;
+
+  return (
+    <details className="group mb-6 rounded-xl border border-[#1e1e1e] bg-[#111]">
+      <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#555]">
+          Booked contacts
+          <span className="ml-2 text-[#aaa]">{booked.length}</span>
+        </span>
+        <span className="text-[#555] transition group-open:rotate-180" aria-hidden="true">▾</span>
+      </summary>
+
+      <div className="border-t border-[#1a1a1a] px-4 py-3">
+        <ul className="flex flex-col divide-y divide-[#1a1a1a]">
+          {booked.map((sub) => {
+            const on = splitNights(sub.booked_dates);
+            const isOpen = openId === sub.id;
+            return (
+              <li key={sub.id} className="py-2">
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-white">{sub.name}</p>
+                    {sub.email ? (
+                      <a
+                        href={`mailto:${sub.email}`}
+                        className="block truncate text-xs text-[#DC143C] hover:underline"
+                        title={sub.email}
+                      >
+                        {sub.email}
+                      </a>
+                    ) : (
+                      <p className="text-xs text-[#444]">no email</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    aria-expanded={isOpen}
+                    onClick={() => setOpenId(isOpen ? null : sub.id)}
+                    className={`min-h-11 shrink-0 rounded-lg border border-[#2a2a2a] px-3 text-[11px] font-semibold transition hover:border-[#DC143C] hover:text-white sm:min-h-0 sm:py-1.5 ${
+                      isOpen ? 'text-white' : 'text-[#666]'
+                    }`}
+                  >
+                    {isOpen ? 'Hide nights' : 'Nights'}
+                  </button>
+                </div>
+                {isOpen && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {on.length ? (
+                      on.map((night) => (
+                        <span key={night} className={`${NIGHT_CHIP} ${NIGHT_ON}`}>
+                          {night}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-[11px] text-[#666]">
+                        No nights picked yet — set them on their row below.
+                      </span>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+
+        {withEmail.length > 0 && (
+          <button
+            type="button"
+            onClick={copyAll}
+            className="mt-3 min-h-11 w-full rounded-lg border border-[#2a2a2a] px-3 text-xs font-semibold text-[#888] transition hover:border-[#DC143C] hover:text-white sm:min-h-0 sm:py-2"
+          >
+            {copied
+              ? '✓ Copied'
+              : `Copy all ${withEmail.length} name${withEmail.length === 1 ? '' : 's'} and email${
+                  withEmail.length === 1 ? '' : 's'
+                }`}
+          </button>
+        )}
+      </div>
+    </details>
   );
 }
 
@@ -876,7 +1037,13 @@ function sortSubmissions(items: Submission[], sort: SortKey): Submission[] {
   }
 }
 
-export default function AdminDashboard({ submissions }: { submissions: Submission[] }) {
+export default function AdminDashboard({
+  submissions,
+  closedNights,
+}: {
+  submissions: Submission[];
+  closedNights: string[];
+}) {
   const [tab, setTab] = useState<TabKey>('applicants');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -1121,7 +1288,12 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
               Export lineup PDF
             </Link>
           </div>
-        ) : (
+        ) : null}
+
+        {/* The contact list is about the lineup, so it lives with it. */}
+        {tab === 'booked' ? <BookedContacts booked={byPlace.booked} /> : null}
+
+        {tab === 'booked' ? null : (
           <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-5">
             <StatCard
               label={search.trim() ? 'Matches' : 'Waiting'}
@@ -1150,7 +1322,7 @@ export default function AdminDashboard({ submissions }: { submissions: Submissio
           </div>
         )}
 
-        <NightsBar nights={nights} />
+        <ShowNightsPanel nights={nights} closed={closedNights} />
 
         {/* ── Search / sort ── */}
         <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">

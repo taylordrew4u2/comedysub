@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import WebForm from './_components/WebForm';
+import { openNights } from './actions';
 
 export const metadata: Metadata = {
   title: 'Pins & Needles — Apply to Perform',
@@ -10,9 +11,12 @@ export const metadata: Metadata = {
 const VENUE = 'The Raging Bull, 161 Lothian Rd, Edinburgh EH3 9AA';
 const MAP_URL = `https://maps.google.com/?q=${encodeURIComponent(VENUE)}`;
 
-export default function HomePage() {
-  const isOpen = process.env.APPLICATIONS_OPEN !== 'false';
+export default async function HomePage() {
   const closingDate = process.env.CLOSING_DATE ?? null;
+  const nights = await openNights();
+  // Every night shut is the same thing as applications being off — there'd be
+  // nothing left to pick, and a form you can't submit is worse than a notice.
+  const isOpen = process.env.APPLICATIONS_OPEN !== 'false' && nights.length > 0;
 
   return (
     <div className="min-h-dvh bg-[#0a0a0a] text-white">
@@ -77,7 +81,7 @@ export default function HomePage() {
                   ⏳ Applications close {closingDate}
                 </p>
               )}
-              <WebForm />
+              <WebForm nights={nights} />
             </div>
           ) : (
             <div className="rounded-2xl border border-[#DC143C]/30 bg-[#DC143C]/10 p-8 text-center sm:p-10">

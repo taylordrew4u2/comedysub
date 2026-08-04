@@ -7,18 +7,70 @@ import { del, put } from '@vercel/blob';
 import {
   deleteSubmission,
   deleteTemplate,
+  getClosedNights,
   getSubmission,
   insertSubmission,
   insertTemplate,
   isSubmissionStatus,
   setAgreement,
   setBookedDates,
+  setClosedNights,
   setNotes,
   setStatus,
   updateTemplate,
   type SubmissionStatus,
 } from './lib/db';
 import { normalizeInstagram, toHttpUrl } from './lib/normalize';
+import { SHOW_NIGHTS, byNight, joinNights } from './lib/nights';
+
+// ── Show nights ────────────────────────────────────────────────────────────────
+
+/**
+ * The nights still taking applications, in show order.
+ *
+ * Falls back to every night if the settings can't be read: a database blip
+ * should leave the form working, not silently close the show.
+ */
+export async function openNights(): Promise<string[]> {
+  try {
+    const closed = new Set(await getClosedNights());
+    return SHOW_NIGHTS.filter((n) => !closed.has(n));
+  } catch (err) {
+    console.error('Could not read closed nights:', err);
+    return SHOW_NIGHTS;
+  }
+}
+
+export interface NightsState {
+  error?: string;
+  /** What the server stored, so the caller can settle on it. */
+  closed?: string[];
+}
+
+/** Admin-only: shuts a night to new applicants, or opens it again. */
+export async function setClosedNightsAction(nights: unknown): Promise<NightsState> {
+  if (!(await isAdmin())) {
+    return { error: 'Unauthorized' };
+  }
+  if (!Array.isArray(nights)) {
+    return { error: 'Missing nights.' };
+  }
+
+  // Rebuilt from the real list, so nothing outside the show can be stored.
+  const wanted = new Set(nights.filter((n): n is string => typeof n === 'string'));
+  const closed = SHOW_NIGHTS.filter((n) => wanted.has(n)).sort(byNight);
+
+  try {
+    await setClosedNights(closed);
+    revalidatePath('/admin');
+    // The public form reads this too — it has to change with it.
+    revalidatePath('/');
+    return { closed };
+  } catch (err) {
+    console.error('Closing nights failed:', err);
+    return { error: 'Failed to save which nights are open.' };
+  }
+}
 
 // ── Public Submission ──────────────────────────────────────────────────────────
 
@@ -40,15 +92,24 @@ export async function submitWebForm(
   const instagram = normalizeInstagram(formData.get('instagram') as string);
   const location = (formData.get('location') as string)?.trim().slice(0, 100) || null;
   const headshotFile = formData.get('headshot') as File | null;
-  const availability = formData.getAll('availability').join(', ') || '';
   const questions = (formData.get('questions') as string)?.trim().slice(0, 1000) || null;
+
+  /*
+   * Nights are re-derived from the open list rather than trusted: a page opened
+   * before a night was closed still offers it, and the stored value should only
+   * ever contain labels the show actually runs, in show order.
+   */
+  const picked = new Set(formData.getAll('availability').map(String));
+  const open = await openNights();
+  const chosen = open.filter((n) => picked.has(n));
+  const availability = joinNights(chosen);
 
   const tattooAnswer = formData.get('has_tattoos');
   const has_tattoos =
     tattooAnswer === 'yes' ? true : tattooAnswer === 'no' ? false : null;
 
   // Only asked when more than one date is offered, so only required then.
-  const dateCount = formData.getAll('availability').length;
+  const dateCount = chosen.length;
   const multiShowAnswer = formData.get('multiple_shows');
   const multiple_shows =
     multiShowAnswer === 'yes' ? true : multiShowAnswer === 'no' ? false : null;
@@ -66,6 +127,13 @@ export async function submitWebForm(
   if (!video_url) missing.push('a video link');
   if (!instagram) missing.push('your Instagram');
   if (!location) missing.push('where you’re located');
+  // Said plainly rather than as "a missing field": they did pick a night, it
+  // just closed while the page was open.
+  if (!availability && picked.size) {
+    return {
+      error: 'Those nights have just closed — please pick from the dates still showing.',
+    };
+  }
   if (!availability) missing.push('at least one available date');
   if (has_tattoos === null) missing.push('the tattoo question');
   if (dateCount > 1 && multiple_shows === null) missing.push('whether you want multiple shows');
