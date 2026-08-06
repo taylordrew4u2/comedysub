@@ -1,48 +1,36 @@
-import { cookies } from 'next/headers';
 import type { Metadata } from 'next';
-import { getClosedNights, getSubmissions, type Submission } from '../lib/db';
-import LoginForm from './LoginForm';
+import { isAdmin } from '../actions';
+import { getBookings, getContent, getServices, getTeam, hasDatabase } from '../lib/db';
 import AdminDashboard from './AdminDashboard';
+import LoginForm from './LoginForm';
 
-// The other admin pages name themselves; this one used to inherit the public
-// page's title, so every open tab read the same thing.
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
-  title: 'Pins & Needles — Admin',
+  title: 'Staff dashboard',
+  robots: { index: false, follow: false },
 };
 
-// Admin page — protected by simple cookie auth.
-// Cookie is set by the adminLogin Server Action in app/actions.ts.
-
 export default async function AdminPage() {
-  const cookieStore = await cookies();
-  const isAuthed = cookieStore.get('admin_auth')?.value === 'true';
+  const content = await getContent();
 
-  if (!isAuthed) {
-    return <LoginForm />;
+  if (!(await isAdmin())) {
+    return <LoginForm brandMark={content.brand_mark} brandTagline={content.brand_tagline} />;
   }
 
-  let submissions: Submission[] = [];
-  let closedNights: string[] = [];
-  let dbError: string | null = null;
+  const [bookings, services, team] = await Promise.all([
+    getBookings(),
+    getServices(),
+    getTeam(),
+  ]);
 
-  try {
-    [submissions, closedNights] = await Promise.all([getSubmissions(), getClosedNights()]);
-  } catch (err) {
-    console.error('Failed to load submissions:', err);
-    dbError =
-      'Could not connect to the database. Make sure POSTGRES_URL (and related) environment variables are configured in Vercel.';
-  }
-
-  if (dbError) {
-    return (
-      <div className="px-safe flex min-h-dvh items-center justify-center bg-[#0a0a0a] py-10">
-        <div className="max-w-md rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center sm:p-8">
-          <p className="mb-2 text-lg font-bold text-red-400">Database Error</p>
-          <p className="text-sm text-[#aaa]">{dbError}</p>
-        </div>
-      </div>
-    );
-  }
-
-  return <AdminDashboard submissions={submissions} closedNights={closedNights} />;
+  return (
+    <AdminDashboard
+      content={content}
+      bookings={bookings}
+      services={services}
+      team={team}
+      storageWarning={!hasDatabase()}
+    />
+  );
 }
