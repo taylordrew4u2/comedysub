@@ -1,73 +1,65 @@
 'use client';
 
-import Link from 'next/link';
 import { useActionState } from 'react';
 import { adminLogin, type LoginState } from '../actions';
-import Logo from '../_components/Logo';
-import { field, primaryButton } from './ui';
 
-export default function LoginForm({
-  brandMark,
-  brandTagline,
-}: {
-  brandMark: string;
-  brandTagline: string;
-}) {
-  const [state, formAction, pending] = useActionState<LoginState, FormData>(
-    adminLogin,
-    {},
-  );
+const initial: LoginState = {};
+
+export default function LoginForm() {
+  const [state, formAction, isPending] = useActionState(adminLogin, initial);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-cream px-6 py-16">
-      <div className="w-full max-w-sm text-center">
-        <Logo mark={brandMark} tagline={brandTagline} className="text-[17px]" />
+    <div className="px-safe flex min-h-dvh items-center justify-center py-10 bg-[#0a0a0a]">
+      <div className="w-full max-w-sm">
+        <div className="mb-8 text-center">
+          <h1 className="text-2xl font-extrabold text-white">
+            Pins &amp; <span className="text-[#DC143C]">Needles</span>
+          </h1>
+          <p className="mt-1 text-sm text-[#555]">Admin Access</p>
+        </div>
 
-        <h1 className="mt-10 font-serif text-2xl font-light text-green-deep">
-          Staff login
-        </h1>
-        <p className="mt-2 text-sm font-light text-ink-soft">
-          Sign in to manage bookings and the website.
-        </p>
-
-        <form action={formAction} className="mt-8 space-y-4 text-left">
-          <div>
-            <label className="sr-only" htmlFor="admin-password">
-              Password
-            </label>
-            <input
-              id="admin-password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              autoFocus
-              required
-              placeholder="Password"
-              className={field}
-            />
-          </div>
-
-          {state.error ? (
-            <p
-              role="alert"
-              className="border-l-2 border-gold bg-gold-wash/50 px-4 py-3 text-sm font-light text-green-deep"
-            >
+        <form
+          action={formAction}
+          className="rounded-2xl border border-[#1e1e1e] bg-[#111] p-6 sm:p-8"
+        >
+          {state.error && (
+            <div className="mb-5 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-400">
               {state.error}
-            </p>
-          ) : null}
+            </div>
+          )}
 
-          <button type="submit" disabled={pending} className={`${primaryButton} w-full`}>
-            {pending ? 'Signing in…' : 'Sign in'}
+          <label
+            htmlFor="admin-password"
+            className="mb-1 block text-xs font-semibold uppercase tracking-wider text-[#888]"
+          >
+            Password
+          </label>
+          <input
+            id="admin-password"
+            name="password"
+            type="password"
+            required
+            autoFocus
+            autoComplete="current-password"
+            enterKeyHint="go"
+            className="mb-5 min-h-12 w-full rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-3.5 py-3 text-base text-white placeholder:text-[#555] focus:border-[#DC143C] focus:outline-none focus:ring-1 focus:ring-[#DC143C] sm:text-sm"
+            placeholder="Enter admin password"
+          />
+
+          <button
+            type="submit"
+            disabled={isPending}
+            className="min-h-12 w-full rounded-xl bg-[#DC143C] py-3 text-sm font-bold text-white transition hover:bg-[#b01030] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isPending ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
 
-        <Link
-          href="/"
-          className="mt-8 inline-block text-[11px] font-light uppercase tracking-[0.2em] text-ink-soft transition-colors hover:text-gold-deep"
-        >
-          ← Back to the website
-        </Link>
+        <p className="mt-4 text-center text-[10px] text-[#333]">
+          {/* Simple cookie-based auth — personal admin only */}
+          Protected by ADMIN_PASSWORD environment variable
+        </p>
       </div>
-    </main>
+    </div>
   );
 }
