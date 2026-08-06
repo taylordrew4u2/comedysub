@@ -1,112 +1,164 @@
-# Pins & Needles — Edinburgh Fringe Submissions
+# TLC Massage Wellness
 
-A Next.js submission platform for comedians applying to **Pins & Needles**, the tattoo-fuelled comedy showcase at Edinburgh Fringe.
+A booking website for **TLC Massage Wellness**, built so the owner can change
+every word of it from a password-protected admin — no developer, no CMS
+subscription, no code.
 
-Built entirely on **free tiers**: Vercel Hobby plan + Vercel Postgres (Neon). No paid services required.
+Every treatment on the site is offered **free of charge**. There is no payment
+step anywhere in the app, and nothing it depends on costs money either: it runs
+on Vercel's Hobby plan with a free Postgres database.
 
 ---
 
-## Features
+## What it does
 
-- **Public submission page** (`/`) — comedians submit their name and a video link
-- **Admin dashboard** (`/admin`) — password-protected, no external auth service
-  - Table of all submissions with search and sort
-  - Clickable video links
-  - Status dropdown per row (new / reviewed / contacted / booked / declined)
-  - Editable admin notes
-  - Summary counts by status
-  - Logout
-- **Booked lineup** (`/admin/lineup`) — print-first page; the browser's Save-as-PDF is the export
-- **Email templates** (`/admin/templates`) — write the standard emails once
-  - `{{first_name}}`, `{{availability}}`, `{{video}}` and friends fill in from a submission
-  - Preview against any real applicant, with a warning for details they haven't given
-  - Opens in your own mail app (or copies to the clipboard) — nothing is sent by the app,
-    so no email service, API key, or sending domain is needed
+### The public site (`/`)
+
+A single scrolling page in the brand's green and gold:
+
+- **Hero** — heading, sub-heading, button label and background photo, all editable
+- **About us** — paragraphs, a list of highlights, and a photo
+- **Our offer** — the treatment list, each with a "Book this" link
+- **Our team** — therapist profiles with photos
+- **Book a visit** — the request form
+- **Contact** — address, opening hours, phone, email, directions link
+- **Footer** — social links and a staff login link
+
+`/book` is the same form on its own page, so "Book this" can land there with the
+treatment already chosen.
+
+### The admin (`/admin`)
+
+Sign in with the password (default `bigdog5` — see [Environment variables](#4-environment-variables)).
+
+| Tab | What you can do |
+|---|---|
+| **Bookings** | See every request. **Accept** or **decline** it in one tap, mark it done, reopen it, leave a private note, or open a pre-written reply in your own mail app. Filter by status; the tab shows a badge for anything still waiting. |
+| **Treatments** | Add, edit, reorder, hide, or delete treatments. They appear on the website and in the booking form immediately. |
+| **Team** | Add, edit, reorder, hide, or delete therapists. Leave everyone hidden and the whole section disappears from the site. |
+| **Website** | Every heading, paragraph, label, address, opening hour and image link on the public site, grouped into eight sections. Also holds the switch that closes bookings, and the list of appointment times people can choose from. |
+
+### How a booking flows
+
+1. A visitor fills in the form: name, email, phone, treatment, date, time, notes.
+2. It arrives in the admin as **awaiting answer**, and the Bookings tab shows a count.
+3. You **accept** or **decline**. Accepted requests can later be marked **completed**.
+4. "Email them" opens your normal mail app with the confirmation already written.
+
+No email is sent by the app itself, which is why it needs no mail service, API
+key, or sending domain.
 
 ---
 
 ## 1. Deploy to Vercel
 
 ### Step 1 — Push to GitHub
-Push this repo to GitHub (public or private).
 
-### Step 2 — Create a Vercel project
-1. Go to [vercel.com](https://vercel.com) → **Add New Project**
-2. Import your GitHub repository
-3. Framework: **Next.js** (auto-detected)
-4. Click **Deploy** (first deploy may fail until the DB is connected — that's fine)
+Push this repository to GitHub (public or private).
 
-### Step 3 — Add free Vercel Postgres
-1. Vercel project dashboard → **Storage** tab
-2. **Create Database** → **Postgres** (Neon) — free tier
-3. Name it anything (e.g. `comedysub-db`) → **Create & Continue** → connect to your project
-4. Vercel automatically injects the required `POSTGRES_*` env vars
+### Step 2 — Create the Vercel project
 
-### Step 4 — Add environment variables
-In Vercel project → **Settings** → **Environment Variables**, add these (all environments):
+1. [vercel.com](https://vercel.com) → **Add New Project**
+2. Import the repository
+3. Framework: **Next.js** (detected automatically)
+4. **Deploy**
+
+The site will already work at this point — it renders its built-in copy — but
+nothing you change in the admin will be saved until you do step 3.
+
+### Step 3 — Add a free Postgres database
+
+1. Vercel project → **Storage** → **Create Database** → **Postgres** (Neon, free tier)
+2. Connect it to the project
+
+Vercel injects the `POSTGRES_*` variables for you. The tables are created on the
+first request, and the treatment list is seeded once — if you delete every
+treatment it stays deleted.
+
+### Step 4 — Environment variables
+
+Project → **Settings** → **Environment Variables**:
 
 | Variable | Required | Description |
 |---|---|---|
-| `ADMIN_PASSWORD` | Yes | Password for the `/admin` dashboard |
-| `BLOB_READ_WRITE_TOKEN` | Optional | Enables headshot uploads. Get from Vercel Storage → Blob. |
-| `APPLICATIONS_OPEN` | Optional | Set to `false` to show an "Applications Closed" message on the public page. |
-| `CLOSING_DATE` | Optional | Display a deadline notice, e.g. `31 July 2026`. |
+| `ADMIN_PASSWORD` | Recommended | The `/admin` password. **Defaults to `bigdog5`** if unset — set your own before the site goes live. |
+| `POSTGRES_URL` | Yes, for saving | Added automatically by the Storage step above. |
 
 ### Step 5 — Redeploy
-Go to **Deployments** → latest deployment → **Redeploy**. Done.
 
-The `submissions` and `email_templates` tables are created automatically on the first request, and new columns are added with `ALTER TABLE … ADD COLUMN IF NOT EXISTS`.
+**Deployments** → latest → **Redeploy**. Then open `/admin`, sign in, and make
+the site yours.
 
 ---
 
-## 2. Local Development
+## 2. Local development
 
 ```bash
 npm install
-
-# Copy env vars from Vercel Dashboard → Storage → your DB → .env.local tab
-# Then add your admin password:
-echo "ADMIN_PASSWORD=yourpassword" >> .env.local
-
 npm run dev
 ```
 
-- Public page: http://localhost:3000
-- Admin dashboard: http://localhost:3000/admin
+- Website: http://localhost:3000
+- Admin: http://localhost:3000/admin (password `bigdog5`)
+
+Without a database the app keeps everything in memory, so it runs and looks
+right but forgets on restart — the admin shows a banner saying so. To develop
+against real storage, copy the connection details from Vercel → Storage → your
+database → `.env.local`.
 
 ---
 
-## 3. Project Structure
+## 3. Project structure
 
 ```
 app/
-├── layout.tsx              Root layout
-├── page.tsx                Public submission page
-├── globals.css             Global styles (dark theme)
-├── actions.ts              Server Actions (submit, login, update, templates)
+├── layout.tsx                Fonts, metadata, root HTML
+├── page.tsx                  The public site
+├── globals.css               Palette and shared styles
+├── icon.svg                  Favicon
+├── actions.ts                Server Actions — booking, login, every admin write
+├── book/page.tsx             The booking form on its own page
 ├── lib/
-│   ├── db.ts               Vercel Postgres helpers + types
-│   ├── normalize.ts        Turns pasted links/handles into safe hrefs
-│   └── emailTemplate.ts    {{placeholder}} rendering + mailto links
+│   ├── content.ts            Every editable line of copy, and its default
+│   ├── db.ts                 Postgres, with an in-memory fallback
+│   └── normalize.ts          Turns pasted links and handles into safe hrefs
 ├── _components/
-│   └── WebForm.tsx         Comedian submission form (client)
+│   ├── Logo.tsx              The butterfly mark, drawn as SVG
+│   ├── SiteNav.tsx           Header and mobile menu
+│   ├── SiteShell.tsx         Header + footer wrapper
+│   ├── BookingSection.tsx    Booking headings and closed notice
+│   ├── BookingForm.tsx       The request form
+│   └── Reveal.tsx            Fade-up on scroll
 └── admin/
-    ├── page.tsx            Admin page (server — auth check)
-    ├── LoginForm.tsx       Admin login form (client)
-    ├── AdminDashboard.tsx  Admin dashboard (client)
-    ├── lineup/             Printable booked lineup
-    └── templates/          Email template editor
+    ├── page.tsx              Auth check
+    ├── LoginForm.tsx         Password form
+    ├── AdminDashboard.tsx    Tabs
+    ├── BookingsPanel.tsx     Accept / decline / notes
+    ├── ServicesPanel.tsx     Treatment editor
+    ├── TeamPanel.tsx         Team editor
+    ├── ContentPanel.tsx      Website copy editor
+    └── ui.ts                 Shared class strings
 ```
+
+### Adding a new editable line to the site
+
+Add a field to the right group in `app/lib/content.ts`. It appears in the admin
+editor, gets a default, and is available as `content.your_key` in the page — no
+other file needs to know about it.
 
 ---
 
-## 4. Dependencies
+## 4. Design
 
-```bash
-npm install @vercel/postgres
-```
+The palette comes from the logo and nothing else: the deep forest green of the
+lettering (`#2f3b2a`), the antique gold of the butterflies (`#a89240`), and the
+warm cream behind them (`#f7f3e8`). Headings are set in Cormorant Garamond and
+everything else in Jost, both self-hosted at build time by `next/font`.
 
-- `next` — Next.js App Router
-- `react` + `react-dom`
-- `@vercel/postgres` — Vercel Postgres client
-- `typescript`, `tailwindcss`, `eslint`
+---
+
+## 5. Dependencies
+
+- `next`, `react`, `react-dom` — App Router
+- `@vercel/postgres` — database client
+- `tailwindcss`, `typescript`, `eslint`

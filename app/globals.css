@@ -1,29 +1,66 @@
 @import "tailwindcss";
 
+/*
+ * The palette is taken straight from the logo: the deep forest green of the
+ * lettering, the antique gold of the butterflies, and the warm cream they sit
+ * on. Nothing else is introduced — every shade below is one of those three
+ * lightened or deepened.
+ */
+@theme {
+  --color-cream: #f7f3e8;
+  --color-cream-deep: #efe7d5;
+  --color-cream-dim: #e4dbc6;
+
+  --color-green-deep: #2f3b2a;
+  --color-green: #3f5138;
+  --color-green-mid: #56684d;
+  --color-green-soft: #8b9a81;
+  --color-green-wash: #dfe4d8;
+
+  --color-gold: #a89240;
+  --color-gold-deep: #8a7530;
+  --color-gold-soft: #c9b577;
+  --color-gold-wash: #ece3c9;
+
+  --color-ink: #2a2e26;
+  --color-ink-soft: #5c6157;
+
+  --font-serif: var(--font-display), 'Iowan Old Style', 'Palatino Linotype',
+    Palatino, 'Times New Roman', serif;
+  --font-sans: var(--font-body), -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
 :root {
-  color-scheme: dark;
+  color-scheme: light;
+
+  /* Short aliases for the handful of places that reach for a colour in an
+     inline style — the logo, mainly, which has to tint its own SVG. */
+  --gold: var(--color-gold);
+  --gold-deep: var(--color-gold-deep);
+  --green-deep: var(--color-green-deep);
+
   /* Notch / home-indicator insets, usable as var() anywhere. */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
-  /* Height of the sticky admin bar — shared so anchors can clear it exactly. */
-  --admin-header-h: calc(var(--safe-top) + 3.5rem);
+
+  /* Height of the fixed site header — anchors clear it by exactly this much. */
+  --header-h: 6rem;
 }
 
 html {
-  /* Stops iOS from inflating text when the phone is rotated to landscape. */
+  /* Stops iOS inflating text when the phone is rotated to landscape. */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   scroll-behavior: smooth;
 }
 
 body {
-  background-color: #0a0a0a;
-  color: #f0f0f0;
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
-    Arial, sans-serif;
+  background-color: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
   /* A stray wide child should never make the whole page pan sideways. */
   overflow-x: hidden;
   -webkit-tap-highlight-color: transparent;
@@ -40,8 +77,7 @@ select,
 
 /*
  * iOS Safari auto-zooms the viewport whenever a focused field is under 16px.
- * The design uses 14px inputs, so force 16px on small screens only — desktop
- * keeps the tighter type scale.
+ * The forms use 15px, so force 16px on small screens only.
  */
 @media (max-width: 767px) {
   input,
@@ -53,55 +89,70 @@ select,
 
 /* Visible keyboard focus that the custom focus:outline-none styles can't eat. */
 :focus-visible {
-  outline: 2px solid #dc143c;
-  outline-offset: 2px;
+  outline: 2px solid var(--color-gold);
+  outline-offset: 3px;
+}
+
+/* Every in-page link lands below the fixed header, not underneath it. */
+[id] {
+  scroll-margin-top: calc(var(--header-h) + 1rem);
 }
 
 /* Safe-area helpers for edge-to-edge (viewportFit: cover) layouts. */
-.pt-safe {
-  padding-top: calc(var(--safe-top) + 0.25rem);
+.px-safe {
+  padding-left: max(1.25rem, var(--safe-left));
+  padding-right: max(1.25rem, var(--safe-right));
 }
 .pb-safe {
   padding-bottom: calc(var(--safe-bottom) + 0.25rem);
 }
-.px-safe {
-  padding-left: max(1rem, var(--safe-left));
-  padding-right: max(1rem, var(--safe-right));
+
+/*
+ * The heading rule: a short gold line centred under section titles. Used often
+ * enough to be worth a class rather than six divs.
+ */
+.rule::after {
+  content: '';
+  display: block;
+  width: 3.5rem;
+  height: 1px;
+  margin: 1.25rem auto 0;
+  background: var(--color-gold);
+}
+.rule-left::after {
+  margin-left: 0;
+  margin-right: auto;
 }
 
 /*
- * A fixed header height keeps the bar from growing when its buttons wrap, and
- * gives paging a scroll target that lands just below it instead of under it.
+ * The leaf shape that bleeds off the left of the hero, echoing the botanical
+ * blob in the reference layout. Purely decorative.
  */
-.admin-header {
-  height: var(--admin-header-h);
-  padding-top: var(--safe-top);
-}
-.admin-scroll-anchor {
-  scroll-margin-top: calc(var(--admin-header-h) + 0.75rem);
+.leaf-blob {
+  border-radius: 62% 38% 46% 54% / 54% 46% 54% 46%;
 }
 
-/*
- * The app is dark everywhere, which is wrong on paper. The lineup export forces
- * itself light and drops its toolbar so Save-as-PDF yields a clean document.
- */
-@media print {
-  .no-print {
-    display: none !important;
-  }
-  body,
-  .lineup {
-    background: #fff !important;
-    color: #000 !important;
-  }
-  @page {
-    margin: 14mm;
-  }
+/* Sections fade up as they arrive. Progressive: without JS they are simply
+   already visible, because `.reveal` only hides once the observer marks it. */
+.reveal-ready {
+  opacity: 0;
+  transform: translateY(1.25rem);
+}
+.reveal-in {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.7s ease-out,
+    transform 0.7s ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+  .reveal-ready {
+    opacity: 1;
+    transform: none;
   }
   *,
   *::before,
@@ -109,5 +160,14 @@ select,
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  @page {
+    margin: 14mm;
   }
 }
