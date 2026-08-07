@@ -1,7 +1,7 @@
 'use client';
 
 import { useActionState, useCallback, useEffect, useRef, useState } from 'react';
-import { recordAgreement, submitWebForm, type SubmitState } from '../actions';
+import { submitWebForm, type SubmitState } from '../actions';
 import { instagramUrl, toHttpUrl } from '../lib/normalize';
 import { nightParts } from '../lib/nights';
 
@@ -51,7 +51,7 @@ const EMPTY: Fields = {
  * from the comedian's side, the Apply button simply does nothing. So validation
  * lives here, points at the visible control, and says what to fix.
  */
-type FieldKey = keyof Fields | 'availability' | 'headshot';
+type FieldKey = keyof Fields | 'availability' | 'agreed' | 'headshot';
 type Problems = Partial<Record<FieldKey, string>>;
 
 /** Form order, so "the first problem" is the topmost one on screen. */
@@ -65,9 +65,15 @@ const FIELD_ORDER: FieldKey[] = [
   'multiple_shows',
   'has_tattoos',
   'headshot',
+  'agreed',
 ];
 
-function validate(fields: Fields, availability: string[], headshot: File | null): Problems {
+function validate(
+  fields: Fields,
+  availability: string[],
+  agreed: boolean,
+  headshot: File | null,
+): Problems {
   const problems: Problems = {};
 
   if (!fields.name.trim()) problems.name = 'Tell us your name.';
@@ -94,6 +100,9 @@ function validate(fields: Fields, availability: string[], headshot: File | null)
   }
   if (!fields.has_tattoos) problems.has_tattoos = 'Let us know either way.';
   if (!headshot) problems.headshot = 'Add a headshot.';
+  // The one condition of playing the show, so it gates the form rather than
+  // being asked afterwards where the answer could be no.
+  if (!agreed) problems.agreed = 'We can only take you if you agree to this.';
 
   return problems;
 }
@@ -138,7 +147,7 @@ async function prepareHeadshot(file: File): Promise<File> {
 // they've typed so coming back doesn't mean starting over.
 const DRAFT_KEY = 'pins-needles-draft-v1';
 
-type Draft = { fields: Partial<Fields>; availability: string[] };
+type Draft = { fields: Partial<Fields>; availability: string[]; agreed?: boolean };
 
 /** Drafts written when the picker dealt in day numbers rather than labels. */
 function draftNights(value: unknown): string[] {
@@ -160,6 +169,7 @@ function readDraft(): Draft | null {
     return {
       fields,
       availability: draftNights(parsed.availability),
+      agreed: parsed.agreed === true,
     };
   } catch {
     // Private browsing, disabled storage, or corrupt JSON — drafts are a bonus.
@@ -183,93 +193,6 @@ function FieldError({ id, message }: { id: string; message?: string }) {
       <span aria-hidden="true">✗</span>
       {message}
     </p>
-  );
-}
-
-function AgreementModal({
-  refId,
-  onDone,
-}: {
-  refId: number;
-  onDone: (agreed: boolean) => void;
-}) {
-  const [checked, setChecked] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  // Freeze the page behind the sheet so mobile scroll stays inside the dialog.
-  useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, []);
-
-  async function answer(agreed: boolean) {
-    setSaving(true);
-    try {
-      await recordAgreement(refId, agreed);
-    } finally {
-      onDone(agreed);
-    }
-  }
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="agreement-title"
-      className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/80 backdrop-blur-sm sm:items-center sm:p-4"
-    >
-      <div className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-[#2a2a2a] bg-[#111] p-6 pb-[calc(1.5rem+var(--safe-bottom))] sm:rounded-2xl sm:p-8 sm:pb-8">
-        {/* Grab handle — signals "sheet" on mobile. */}
-        <div className="mx-auto mb-5 h-1 w-10 rounded-full bg-[#2a2a2a] sm:hidden" aria-hidden="true" />
-
-        <p id="agreement-title" className="mb-2 text-xl font-extrabold text-white">
-          One last thing
-        </p>
-        <p className="mb-5 text-sm leading-relaxed text-[#888]">
-          Comedians who agree to the below will take priority when we book the lineup.
-        </p>
-
-        <label className="mb-6 flex cursor-pointer items-start gap-3 rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] p-4 transition active:border-[#DC143C]/60">
-          <input
-            type="checkbox"
-            checked={checked}
-            onChange={(e) => setChecked(e.target.checked)}
-            className="mt-0.5 h-5 w-5 shrink-0 accent-[#DC143C]"
-          />
-          <span className="text-sm leading-relaxed text-white">
-            I agree to bring at least <strong>two people</strong> to the show.
-            The show is <strong>free</strong> and there is <strong>no drink minimum</strong>.
-          </span>
-        </label>
-
-        <div className="flex flex-col-reverse gap-3 sm:grid sm:grid-cols-2">
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => answer(false)}
-            className="min-h-12 rounded-xl border border-[#2a2a2a] py-3 text-sm font-semibold uppercase tracking-widest text-[#888] transition hover:border-[#555] hover:text-white disabled:opacity-40"
-          >
-            I Disagree
-          </button>
-          <button
-            type="button"
-            disabled={!checked || saving}
-            onClick={() => answer(true)}
-            className="min-h-12 rounded-xl bg-[#DC143C] py-3 text-sm font-extrabold uppercase tracking-widest text-white transition hover:bg-[#b01030] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            {saving ? 'Saving…' : 'I Agree'}
-          </button>
-        </div>
-        {!checked && (
-          <p className="mt-3 text-center text-[11px] text-[#555]">
-            Tick the box above to agree.
-          </p>
-        )}
-      </div>
-    </div>
   );
 }
 
@@ -550,9 +473,9 @@ function HeadshotField({
 
 export default function WebForm({ nights }: { nights: string[] }) {
   const [state, formAction, isPending] = useActionState(submitWebForm, initial);
-  const [agreement, setAgreement] = useState<'agreed' | 'declined' | null>(null);
   const [fields, setFields] = useState<Fields>(EMPTY);
   const [availability, setAvailability] = useState<string[]>([]);
+  const [agreed, setAgreed] = useState(false);
   const [headshot, setHeadshot] = useState<File | null>(null);
   const [problems, setProblems] = useState<Problems>({});
   const [draftRestored, setDraftRestored] = useState(false);
@@ -562,6 +485,7 @@ export default function WebForm({ nights }: { nights: string[] }) {
   const datesRef = useRef<HTMLDivElement>(null);
   const multiRef = useRef<HTMLDivElement>(null);
   const tattooRef = useRef<HTMLDivElement>(null);
+  const agreedRef = useRef<HTMLInputElement>(null);
   // Guards the save effect from firing before the restore effect has run.
   const hydrated = useRef(false);
 
@@ -583,7 +507,7 @@ export default function WebForm({ nights }: { nights: string[] }) {
     // A night that has closed since they started is quietly dropped.
     const days = draft.availability.filter((d) => nights.includes(d));
     const restored: Fields = { ...EMPTY };
-    let found = days.length > 0;
+    let found = days.length > 0 || draft.agreed === true;
 
     (Object.keys(EMPTY) as (keyof Fields)[]).forEach((key) => {
       const value = draft.fields[key];
@@ -603,6 +527,7 @@ export default function WebForm({ nights }: { nights: string[] }) {
 
     if (!found) return;
     setAvailability(days);
+    setAgreed(draft.agreed === true);
     setFields(restored);
     setDraftRestored(true);
   }, []);
@@ -612,14 +537,15 @@ export default function WebForm({ nights }: { nights: string[] }) {
     if (!hydrated.current) return;
     const empty =
       availability.length === 0 &&
+      !agreed &&
       (Object.keys(EMPTY) as (keyof Fields)[]).every((k) => !fields[k]);
     try {
       if (empty) localStorage.removeItem(DRAFT_KEY);
-      else localStorage.setItem(DRAFT_KEY, JSON.stringify({ fields, availability }));
+      else localStorage.setItem(DRAFT_KEY, JSON.stringify({ fields, availability, agreed }));
     } catch {
       /* storage unavailable — the form still works, it just won't persist */
     }
-  }, [fields, availability]);
+  }, [fields, availability, agreed]);
 
   useEffect(() => {
     saveDraft();
@@ -650,6 +576,7 @@ export default function WebForm({ nights }: { nights: string[] }) {
     clearDraft();
     setFields(EMPTY);
     setAvailability([]);
+    setAgreed(false);
     setHeadshot(null);
     setProblems({});
     if (headshotRef.current) headshotRef.current.value = '';
@@ -668,16 +595,18 @@ export default function WebForm({ nights }: { nights: string[] }) {
           ? multiRef.current
           : key === 'has_tattoos'
             ? tattooRef.current
-            : key === 'headshot'
-              ? formRef.current?.querySelector<HTMLElement>('label[for="headshot"]')
-              : formRef.current?.elements.namedItem(key);
+            : key === 'agreed'
+              ? agreedRef.current
+              : key === 'headshot'
+                ? formRef.current?.querySelector<HTMLElement>('label[for="headshot"]')
+                : formRef.current?.elements.namedItem(key);
     const el = target instanceof HTMLElement ? target : null;
     el?.scrollIntoView({ block: 'center' });
     el?.focus?.();
   }
 
   function handleSubmit(formData: FormData) {
-    const found = validate(fields, availability, headshot);
+    const found = validate(fields, availability, agreed, headshot);
     setProblems(found);
     if (Object.keys(found).length) {
       goToFirstProblem(found);
@@ -703,31 +632,24 @@ export default function WebForm({ nights }: { nights: string[] }) {
 
   if (state.success && state.refId) {
     return (
-      <>
-        {agreement === null && (
-          <AgreementModal refId={state.refId} onDone={(a) => setAgreement(a ? 'agreed' : 'declined')} />
-        )}
-        <div ref={topRef} className="scroll-mt-6 py-6 text-center">
-          <p className="mb-1 text-2xl font-extrabold text-white">You&apos;re in!</p>
-          <p className="text-sm text-[#666]">
-            We&apos;ll be in touch if you&apos;re shortlisted.
-          </p>
-          {/* Said here as well as on the form — this is the screen people
-              actually read, and both a DM from a stranger and a first email
-              land somewhere you have to go looking. */}
-          <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-[#aaa]">
-            We message on <span className="font-semibold text-white">Instagram</span> and by{' '}
-            <span className="font-semibold text-white">email</span> — so keep an eye on your DMs
-            (including message requests) and your spam folder.
-          </p>
-          {agreement === 'agreed' && (
-            <p className="mt-3 text-xs font-semibold text-[#DC143C]">
-              ★ Priority noted — thanks for agreeing to bring two people.
-            </p>
-          )}
-          <p className="mt-4 font-mono text-xs text-[#444]">ref #{state.refId}</p>
-        </div>
-      </>
+      <div ref={topRef} className="scroll-mt-6 py-6 text-center">
+        <p className="mb-1 text-2xl font-extrabold text-white">You&apos;re in!</p>
+        <p className="text-sm text-[#666]">
+          We&apos;ll be in touch if you&apos;re shortlisted.
+        </p>
+        {/* Said here as well as on the form — this is the screen people
+            actually read, and both a DM from a stranger and a first email
+            land somewhere you have to go looking. */}
+        <p className="mx-auto mt-3 max-w-xs text-sm leading-relaxed text-[#aaa]">
+          We message on <span className="font-semibold text-white">Instagram</span> and by{' '}
+          <span className="font-semibold text-white">email</span> — so keep an eye on your DMs
+          (including message requests) and your spam folder.
+        </p>
+        <p className="mx-auto mt-3 max-w-xs text-xs leading-relaxed text-[#666]">
+          Remember: you&apos;ve agreed to bring at least two people if you&apos;re booked.
+        </p>
+        <p className="mt-4 font-mono text-xs text-[#444]">ref #{state.refId}</p>
+      </div>
     );
   }
 
@@ -948,6 +870,41 @@ export default function WebForm({ nights }: { nights: string[] }) {
           We&apos;ll answer when we get back to you.
         </p>
       </div>
+
+      {/* The condition of playing the show, so it sits with the button rather
+          than after the submission, where the honest answer could be no. */}
+      <label
+        className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition ${
+          problems.agreed
+            ? 'border-red-500/70 bg-red-500/5'
+            : agreed
+              ? 'border-[#DC143C] bg-[#DC143C]/10'
+              : 'border-[#2a2a2a] bg-[#0a0a0a] hover:border-[#DC143C]/60'
+        }`}
+      >
+        <input
+          ref={agreedRef}
+          type="checkbox"
+          name="agreed"
+          checked={agreed}
+          onChange={(e) => {
+            setAgreed(e.target.checked);
+            if (e.target.checked) clearProblem('agreed');
+          }}
+          aria-invalid={!!problems.agreed}
+          aria-describedby={problems.agreed ? 'agreed-error' : undefined}
+          className="mt-0.5 h-5 w-5 shrink-0 accent-[#DC143C]"
+        />
+        <span className="text-sm leading-relaxed text-white">
+          I&apos;ll bring at least <strong>two people</strong> to the show. *
+          <span className="mt-1 block text-xs text-[#888]">
+            The show is <strong className="font-semibold text-[#aaa]">free</strong> and there&apos;s{' '}
+            <strong className="font-semibold text-[#aaa]">no drink minimum</strong>
+            {' — '}it&apos;s how we fill the room.
+          </span>
+        </span>
+      </label>
+      <FieldError id="agreed-error" message={problems.agreed} />
 
       <button
         type="submit"
