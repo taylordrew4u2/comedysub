@@ -89,6 +89,9 @@ export async function insertSubmission(data: {
   headshot_url: string | null;
   has_tattoos: boolean | null;
   multiple_shows: boolean | null;
+  /** Agreeing to bring two people is a condition of applying, so it arrives
+   *  with the submission rather than being asked for afterwards. */
+  agreed_bring_two: boolean;
   questions: string | null;
   source: 'web';
 }): Promise<{ id: number }> {
@@ -96,11 +99,12 @@ export async function insertSubmission(data: {
   const { rows } = await sql`
     INSERT INTO submissions
       (name, email, instagram, location, availability, video_url, headshot_url,
-       has_tattoos, multiple_shows, questions, source)
+       has_tattoos, multiple_shows, agreed_bring_two, questions, source)
     VALUES
       (${data.name}, ${data.email}, ${data.instagram}, ${data.location},
        ${data.availability}, ${data.video_url}, ${data.headshot_url},
-       ${data.has_tattoos}, ${data.multiple_shows}, ${data.questions}, ${data.source})
+       ${data.has_tattoos}, ${data.multiple_shows}, ${data.agreed_bring_two},
+       ${data.questions}, ${data.source})
     RETURNING id
   `;
   return rows[0] as { id: number };
@@ -115,13 +119,6 @@ export async function getSubmissions(): Promise<Submission[]> {
   await ensureTable();
   const { rows } = await sql`SELECT * FROM submissions ORDER BY submitted_at DESC`;
   return rows as unknown as Submission[];
-}
-
-export async function setAgreement(id: number, agreed: boolean): Promise<void> {
-  await sql`
-    UPDATE submissions SET agreed_bring_two = ${agreed}
-    WHERE id = ${id} AND agreed_bring_two IS NULL
-  `;
 }
 
 export async function getSubmission(id: number): Promise<Submission | null> {

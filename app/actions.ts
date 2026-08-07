@@ -12,7 +12,6 @@ import {
   insertSubmission,
   insertTemplate,
   isSubmissionStatus,
-  setAgreement,
   setBookedDates,
   setClosedNights,
   setNotes,
@@ -104,6 +103,8 @@ export async function submitWebForm(
   const chosen = open.filter((n) => picked.has(n));
   const availability = joinNights(chosen);
 
+  const agreed_bring_two = formData.get('agreed') === 'on';
+
   const tattooAnswer = formData.get('has_tattoos');
   const has_tattoos =
     tattooAnswer === 'yes' ? true : tattooAnswer === 'no' ? false : null;
@@ -136,6 +137,7 @@ export async function submitWebForm(
   }
   if (!availability) missing.push('at least one available date');
   if (has_tattoos === null) missing.push('the tattoo question');
+  if (!agreed_bring_two) missing.push('your agreement to bring two people');
   if (dateCount > 1 && multiple_shows === null) missing.push('whether you want multiple shows');
   if (!headshotFile || headshotFile.size === 0) missing.push('a headshot');
 
@@ -179,6 +181,7 @@ export async function submitWebForm(
       headshot_url,
       has_tattoos,
       multiple_shows,
+      agreed_bring_two,
       questions,
       source: 'web',
     });
@@ -186,15 +189,6 @@ export async function submitWebForm(
   } catch (err) {
     console.error('DB error:', err);
     return { error: 'Failed to save your submission. Please try again later.' };
-  }
-}
-
-export async function recordAgreement(refId: number, agreed: boolean): Promise<void> {
-  if (!Number.isInteger(refId) || typeof agreed !== 'boolean') return;
-  try {
-    await setAgreement(refId, agreed);
-  } catch (err) {
-    console.error('Agreement update failed:', err);
   }
 }
 
