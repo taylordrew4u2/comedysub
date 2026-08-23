@@ -21,9 +21,9 @@ export interface Submission {
   email: string | null;
   instagram: string | null;
   location: string | null;
+  /** Festival-era only: the Aug 6–18 nights an applicant offered. Nothing
+   *  writes these any more, and they're kept so old records stay readable. */
   availability: string;
-  /** The nights they're actually on, picked by the admin once they're booked.
-   *  Always a subset of `availability`, in the same comma-separated format. */
   booked_dates: string | null;
   video_url: string | null;
   headshot_url: string | null;
@@ -84,7 +84,6 @@ export async function insertSubmission(data: {
   email: string | null;
   instagram: string | null;
   location: string | null;
-  availability: string;
   video_url: string | null;
   headshot_url: string | null;
   has_tattoos: boolean | null;
@@ -98,11 +97,11 @@ export async function insertSubmission(data: {
   await ensureTable();
   const { rows } = await sql`
     INSERT INTO submissions
-      (name, email, instagram, location, availability, video_url, headshot_url,
+      (name, email, instagram, location, video_url, headshot_url,
        has_tattoos, multiple_shows, agreed_bring_two, questions, source)
     VALUES
       (${data.name}, ${data.email}, ${data.instagram}, ${data.location},
-       ${data.availability}, ${data.video_url}, ${data.headshot_url},
+       ${data.video_url}, ${data.headshot_url},
        ${data.has_tattoos}, ${data.multiple_shows}, ${data.agreed_bring_two},
        ${data.questions}, ${data.source})
     RETURNING id
@@ -119,18 +118,6 @@ export async function getSubmissions(): Promise<Submission[]> {
   await ensureTable();
   const { rows } = await sql`SELECT * FROM submissions ORDER BY submitted_at DESC`;
   return rows as unknown as Submission[];
-}
-
-export async function getSubmission(id: number): Promise<Submission | null> {
-  await ensureTable();
-  const { rows } = await sql`SELECT * FROM submissions WHERE id = ${id}`;
-  return (rows[0] as unknown as Submission) ?? null;
-}
-
-/** Writes the nights an already-booked comedian is on. Validated by the caller
- *  against their availability, so this stores whatever it is given. */
-export async function setBookedDates(id: number, dates: string): Promise<void> {
-  await sql`UPDATE submissions SET booked_dates = ${dates} WHERE id = ${id}`;
 }
 
 /* Status and notes save separately: the status is a one-tap pill, the notes are
@@ -152,45 +139,6 @@ export async function setNotes(id: number, admin_notes: string): Promise<boolean
 export async function deleteSubmission(id: number): Promise<Submission | null> {
   const { rows } = await sql`DELETE FROM submissions WHERE id = ${id} RETURNING *`;
   return (rows[0] as unknown as Submission) ?? null;
-}
-
-// ── Show settings ──────────────────────────────────────────────────────────────
-
-/** Same first-use pattern as everything else — no migration step. */
-async function ensureSettingsTable(): Promise<void> {
-  await sql`
-    CREATE TABLE IF NOT EXISTS show_settings (
-      key   TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    )
-  `;
-}
-
-const CLOSED_NIGHTS_KEY = 'closed_nights';
-
-/**
- * The nights that are shut to new applicants, comma-separated.
- *
- * Stored as *closed* rather than open so an empty table means "everything is
- * open" — the behaviour before this existed, and no seeding to get there.
- */
-export async function getClosedNights(): Promise<string[]> {
-  await ensureSettingsTable();
-  const { rows } = await sql`SELECT value FROM show_settings WHERE key = ${CLOSED_NIGHTS_KEY}`;
-  const value = (rows[0] as { value?: string } | undefined)?.value ?? '';
-  return value
-    .split(',')
-    .map((n) => n.trim())
-    .filter(Boolean);
-}
-
-export async function setClosedNights(nights: string[]): Promise<void> {
-  await ensureSettingsTable();
-  await sql`
-    INSERT INTO show_settings (key, value)
-    VALUES (${CLOSED_NIGHTS_KEY}, ${nights.join(', ')})
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
-  `;
 }
 
 // ── Email templates ────────────────────────────────────────────────────────────

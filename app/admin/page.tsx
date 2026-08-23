@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers';
 import type { Metadata } from 'next';
-import { getClosedNights, getSubmissions, type Submission } from '../lib/db';
+import { getSubmissions, type Submission } from '../lib/db';
 import LoginForm from './LoginForm';
 import AdminDashboard from './AdminDashboard';
 
@@ -22,11 +22,10 @@ export default async function AdminPage() {
   }
 
   let submissions: Submission[] = [];
-  let closedNights: string[] = [];
   let dbError: string | null = null;
 
   try {
-    [submissions, closedNights] = await Promise.all([getSubmissions(), getClosedNights()]);
+    submissions = await getSubmissions();
   } catch (err) {
     console.error('Failed to load submissions:', err);
     dbError =
@@ -44,5 +43,5 @@ export default async function AdminPage() {
     );
   }
 
-  return <AdminDashboard submissions={submissions} closedNights={closedNights} />;
+  return <AdminDashboard submissions={submissions} />;
 }

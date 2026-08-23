@@ -1,22 +1,24 @@
 import type { Metadata } from 'next';
 import WebForm from './_components/WebForm';
-import { openNights } from './actions';
 
 export const metadata: Metadata = {
   title: 'Pins & Needles — Apply to Perform',
   description:
-    'Scottish stand-up comedian? Apply to perform at Pins & Needles at Edinburgh Fringe. Submit your set video now.',
+    'Scottish stand-up comedian? Apply to perform at Pins & Needles. Submit your set video — we book from these all year.',
 };
 
-const VENUE = 'The Raging Bull, 161 Lothian Rd, Edinburgh EH3 9AA';
-const MAP_URL = `https://maps.google.com/?q=${encodeURIComponent(VENUE)}`;
+/*
+ * The venue moves between shows now, so it isn't baked in. Set SHOW_VENUE (and
+ * optionally SHOW_TIME) and the details strip appears; leave them unset and the
+ * page simply doesn't promise a room it can't name.
+ */
+const VENUE = process.env.SHOW_VENUE?.trim() || null;
+const SHOW_TIME = process.env.SHOW_TIME?.trim() || null;
+const MAP_URL = VENUE ? `https://maps.google.com/?q=${encodeURIComponent(VENUE)}` : null;
 
-export default async function HomePage() {
+export default function HomePage() {
+  const isOpen = process.env.APPLICATIONS_OPEN !== 'false';
   const closingDate = process.env.CLOSING_DATE ?? null;
-  const nights = await openNights();
-  // Every night shut is the same thing as applications being off — there'd be
-  // nothing left to pick, and a form you can't submit is worse than a notice.
-  const isOpen = process.env.APPLICATIONS_OPEN !== 'false' && nights.length > 0;
 
   return (
     <div className="min-h-dvh bg-[#0a0a0a] text-white">
@@ -26,7 +28,7 @@ export default async function HomePage() {
           <span className="text-xs font-bold tracking-widest text-[#DC143C] uppercase">
             Pins &amp; Needles
           </span>
-          <span className="shrink-0 text-xs text-[#444]">Edinburgh Fringe</span>
+          <span className="shrink-0 text-xs text-[#444]">Comedy Show</span>
         </div>
       </header>
 
@@ -45,10 +47,10 @@ export default async function HomePage() {
               — apply here.
             </h1>
             <p className="max-w-md text-base leading-relaxed text-[#888]">
-              We&apos;re booking Scottish stand-up comedians for Pins &amp; Needles —
-              a late-night show at The Raging Bull, Edinburgh Fringe.
-              Submit your set video and we&apos;ll message you on Instagram or by email
-              if you&apos;re selected — so keep an eye on both.
+              We&apos;re booking Scottish stand-up comedians for Pins &amp; Needles.
+              Send your set video whenever you like — we book from these as shows
+              come up, and we&apos;ll message you on Instagram or by email if
+              you&apos;re selected, so keep an eye on both.
             </p>
 
             {isOpen && (
@@ -81,7 +83,7 @@ export default async function HomePage() {
                   ⏳ Applications close {closingDate}
                 </p>
               )}
-              <WebForm nights={nights} />
+              <WebForm />
             </div>
           ) : (
             <div className="rounded-2xl border border-[#DC143C]/30 bg-[#DC143C]/10 p-8 text-center sm:p-10">
@@ -92,27 +94,33 @@ export default async function HomePage() {
             </div>
           )}
 
-          {/* ── Show details — supporting info, below the fold ── */}
-          <div className="mt-8 flex flex-col gap-1 border-t border-[#1a1a1a] pt-6 sm:flex-row sm:items-center sm:gap-6">
-            <a
-              href={MAP_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex min-h-11 items-center gap-2.5 text-sm text-[#666] transition-colors hover:text-[#DC143C]"
-            >
-              <span className="text-[#DC143C]" aria-hidden="true">📍</span>
-              <span>The Raging Bull · 161 Lothian Rd, Edinburgh EH3 9AA</span>
-            </a>
-            <div className="flex min-h-11 items-center gap-2.5 text-sm text-[#666]">
-              <span className="text-[#DC143C]" aria-hidden="true">🕙</span>
-              <span>22:15 · Aug 6–18</span>
+          {/* ── Show details — only once there's a venue to name ── */}
+          {(VENUE || SHOW_TIME) && (
+            <div className="mt-8 flex flex-col gap-1 border-t border-[#1a1a1a] pt-6 sm:flex-row sm:items-center sm:gap-6">
+              {VENUE && MAP_URL && (
+                <a
+                  href={MAP_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex min-h-11 items-center gap-2.5 text-sm text-[#666] transition-colors hover:text-[#DC143C]"
+                >
+                  <span className="text-[#DC143C]" aria-hidden="true">📍</span>
+                  <span>{VENUE}</span>
+                </a>
+              )}
+              {SHOW_TIME && (
+                <div className="flex min-h-11 items-center gap-2.5 text-sm text-[#666]">
+                  <span className="text-[#DC143C]" aria-hidden="true">🕙</span>
+                  <span>{SHOW_TIME}</span>
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </div>
       </main>
 
       <footer className="px-safe pb-safe border-t border-[#1a1a1a] py-6 text-center text-xs text-[#333]">
-        © Pins &amp; Needles Comedy · Edinburgh Fringe
+        © Pins &amp; Needles Comedy
       </footer>
     </div>
   );
