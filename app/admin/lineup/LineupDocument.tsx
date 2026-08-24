@@ -97,19 +97,20 @@ function ComedianCard({ sub, position }: { sub: Submission; position: number }) 
               href={igHref}
             />
             <Row label="Location" value={sub.location} />
-            {/* Festival-era records only — nothing writes these now. */}
+            {/* Older records only — nothing writes these now, and each row
+                disappears when its value is null. */}
             <Row label="Booked for" value={sub.booked_dates || null} />
             <Row label="Offered" value={sub.availability || null} />
-            <Row
-              label="Tattoos"
-              value={
-                sub.has_tattoos === null ? null : sub.has_tattoos ? 'Yes' : 'No'
-              }
-            />
             <Row
               label="Multiple shows"
               value={
                 sub.multiple_shows === null ? null : sub.multiple_shows ? 'Yes' : 'No'
+              }
+            />
+            <Row
+              label="Tattoos"
+              value={
+                sub.has_tattoos === null ? null : sub.has_tattoos ? 'Yes' : 'No'
               }
             />
             <Row label="Brings +2" value={yesNo(sub.agreed_bring_two)} />

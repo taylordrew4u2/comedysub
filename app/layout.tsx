@@ -4,7 +4,7 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Pins & Needles — Submissions',
   description:
-    'Apply to perform at Pins & Needles, the tattoo-fuelled comedy showcase.',
+    'Apply to perform at Pins & Needles, the tattoo comedy show in Brooklyn, NY.',
   appleWebApp: {
     capable: true,
     title: 'Pins & Needles',

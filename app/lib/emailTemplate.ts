@@ -73,7 +73,7 @@ export const SAMPLE_SUBMISSION: Submission = {
   name: 'Sam Example',
   email: 'sam@example.com',
   instagram: 'sam.example',
-  location: 'Glasgow',
+  location: 'Brooklyn',
   availability: '',
   booked_dates: null,
   video_url: 'https://youtube.com/watch?v=example',
