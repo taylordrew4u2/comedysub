@@ -45,10 +45,6 @@ export async function submitWebForm(
   const has_tattoos =
     tattooAnswer === 'yes' ? true : tattooAnswer === 'no' ? false : null;
 
-  const multiShowAnswer = formData.get('multiple_shows');
-  const multiple_shows =
-    multiShowAnswer === 'yes' ? true : multiShowAnswer === 'no' ? false : null;
-
   /*
    * Everything except `questions` is required. The `required` attributes on the
    * form are a convenience — they're trivially bypassed — so the real check
@@ -63,7 +59,6 @@ export async function submitWebForm(
   if (!instagram) missing.push('your Instagram');
   if (!location) missing.push('where you’re located');
   if (has_tattoos === null) missing.push('the tattoo question');
-  if (multiple_shows === null) missing.push('whether you want more than one show');
   if (!agreed_bring_two) missing.push('your agreement to bring two people');
   if (!headshotFile || headshotFile.size === 0) missing.push('a headshot');
 
@@ -105,7 +100,6 @@ export async function submitWebForm(
       video_url,
       headshot_url,
       has_tattoos,
-      multiple_shows,
       agreed_bring_two,
       questions,
       source: 'web',

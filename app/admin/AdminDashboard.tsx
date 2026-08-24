@@ -142,6 +142,7 @@ function FlagBadges({ sub }: { sub: Submission }) {
     flags.push({ key: 'ink', label: 'No tattoos', className: 'bg-[#1e1e1e] text-[#777]' });
   }
 
+  // Older records only — the form stopped asking, so this is null on new ones.
   if (sub.multiple_shows === true) {
     flags.push({ key: 'multi', label: 'Multi-show', className: 'bg-[#DC143C]/20 text-[#f08ba0]' });
   } else if (sub.multiple_shows === false) {

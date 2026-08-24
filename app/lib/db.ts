@@ -32,6 +32,8 @@ export interface Submission {
   admin_notes: string | null;
   agreed_bring_two: boolean | null;
   has_tattoos: boolean | null;
+  /** Also history only: whether they wanted more than one show. Nothing asks
+   *  this any more; the column stays so old records keep their answer. */
   multiple_shows: boolean | null;
   questions: string | null;
   submitted_at: string;
@@ -87,7 +89,6 @@ export async function insertSubmission(data: {
   video_url: string | null;
   headshot_url: string | null;
   has_tattoos: boolean | null;
-  multiple_shows: boolean | null;
   /** Agreeing to bring two people is a condition of applying, so it arrives
    *  with the submission rather than being asked for afterwards. */
   agreed_bring_two: boolean;
@@ -98,11 +99,11 @@ export async function insertSubmission(data: {
   const { rows } = await sql`
     INSERT INTO submissions
       (name, email, instagram, location, video_url, headshot_url,
-       has_tattoos, multiple_shows, agreed_bring_two, questions, source)
+       has_tattoos, agreed_bring_two, questions, source)
     VALUES
       (${data.name}, ${data.email}, ${data.instagram}, ${data.location},
        ${data.video_url}, ${data.headshot_url},
-       ${data.has_tattoos}, ${data.multiple_shows}, ${data.agreed_bring_two},
+       ${data.has_tattoos}, ${data.agreed_bring_two},
        ${data.questions}, ${data.source})
     RETURNING id
   `;

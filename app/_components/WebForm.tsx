@@ -31,7 +31,6 @@ type Fields = {
   location: string;
   questions: string;
   has_tattoos: YesNo;
-  multiple_shows: YesNo;
 };
 
 const EMPTY: Fields = {
@@ -42,7 +41,6 @@ const EMPTY: Fields = {
   location: '',
   questions: '',
   has_tattoos: null,
-  multiple_shows: null,
 };
 
 /**
@@ -64,7 +62,6 @@ const FIELD_ORDER: FieldKey[] = [
   'video_url',
   'instagram',
   'location',
-  'multiple_shows',
   'has_tattoos',
   'headshot',
   'agreed',
@@ -91,7 +88,6 @@ function validate(fields: Fields, agreed: boolean, headshot: File | null): Probl
   }
 
   if (!fields.location.trim()) problems.location = 'Let us know where you’re based.';
-  if (!fields.multiple_shows) problems.multiple_shows = 'Pick one — happy to, or one is plenty.';
   if (!fields.has_tattoos) problems.has_tattoos = 'Let us know either way.';
   if (!headshot) problems.headshot = 'Add a headshot.';
   // The one condition of playing the show, so it gates the form rather than
@@ -147,12 +143,9 @@ function readDraft(): Draft | null {
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Draft & { multipleShows?: YesNo };
+    const parsed = JSON.parse(raw) as Draft;
     if (!parsed || typeof parsed !== 'object') return null;
-    const fields = { ...(parsed.fields ?? {}) };
-    // Drafts written before multiple_shows moved in with the other fields.
-    if (!fields.multiple_shows && parsed.multipleShows) fields.multiple_shows = parsed.multipleShows;
-    return { fields, agreed: parsed.agreed === true };
+    return { fields: { ...(parsed.fields ?? {}) }, agreed: parsed.agreed === true };
   } catch {
     // Private browsing, disabled storage, or corrupt JSON — drafts are a bonus.
     return null;
@@ -178,7 +171,7 @@ function FieldError({ id, message }: { id: string; message?: string }) {
   );
 }
 
-/** The yes/no pairs — tattoos and multiple shows — drawn the same way. */
+/** The yes/no question — its own component so the tiles stay consistent. */
 function ChoiceField({
   name,
   label,
@@ -363,7 +356,6 @@ export default function WebForm() {
   const topRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const headshotRef = useRef<HTMLInputElement>(null);
-  const multiRef = useRef<HTMLDivElement>(null);
   const tattooRef = useRef<HTMLDivElement>(null);
   const agreedRef = useRef<HTMLInputElement>(null);
   // Guards the save effect from firing before the restore effect has run.
@@ -388,7 +380,7 @@ export default function WebForm() {
     (Object.keys(EMPTY) as (keyof Fields)[]).forEach((key) => {
       const value = draft.fields[key];
       if (!value) return;
-      if (key === 'has_tattoos' || key === 'multiple_shows') {
+      if (key === 'has_tattoos') {
         if (value === 'yes' || value === 'no') {
           restored[key] = value;
           found = true;
@@ -462,15 +454,13 @@ export default function WebForm() {
     const key = FIELD_ORDER.find((f) => found[f]);
     if (!key) return;
     const target =
-      key === 'multiple_shows'
-          ? multiRef.current
-          : key === 'has_tattoos'
-            ? tattooRef.current
-            : key === 'agreed'
-              ? agreedRef.current
-              : key === 'headshot'
-                ? formRef.current?.querySelector<HTMLElement>('label[for="headshot"]')
-                : formRef.current?.elements.namedItem(key);
+      key === 'has_tattoos'
+        ? tattooRef.current
+        : key === 'agreed'
+          ? agreedRef.current
+          : key === 'headshot'
+            ? formRef.current?.querySelector<HTMLElement>('label[for="headshot"]')
+            : formRef.current?.elements.namedItem(key);
     const el = target instanceof HTMLElement ? target : null;
     el?.scrollIntoView({ block: 'center' });
     el?.focus?.();
@@ -687,20 +677,6 @@ export default function WebForm() {
           <FieldError id="location-error" message={problems.location} />
         </div>
       </div>
-
-      <ChoiceField
-        name="multiple_shows"
-        label="Happy to play more than one show? *"
-        options={[
-          { value: 'yes', label: 'Yes please' },
-          { value: 'no', label: 'Just the one' },
-        ]}
-        value={fields.multiple_shows}
-        onChange={(v) => setField('multiple_shows', v)}
-        error={problems.multiple_shows}
-        groupRef={multiRef}
-        boxed
-      />
 
       <ChoiceField
         name="has_tattoos"
