@@ -423,8 +423,8 @@ function NotesForm({ sub }: { sub: Submission }) {
 
 /** The notes + delete panel, shared by the desktop row and the phone card. */
 function EditPanel({ sub }: { sub: Submission }) {
-  // Only festival-era records carry these, and only here: the dates are history
-  // rather than something to act on, but hiding them would lose the record.
+  // Only older records carry these, and only here: the dates are history rather
+  // than something to act on, but hiding them would lose the record.
   const offered = sub.availability?.trim();
   const wasOn = sub.booked_dates?.trim();
 
@@ -432,7 +432,7 @@ function EditPanel({ sub }: { sub: Submission }) {
     <div className="flex flex-col gap-3">
       {(offered || wasOn) && (
         <p className="text-[11px] leading-snug text-[#555]">
-          <span className="font-semibold text-[#666]">From the Fringe run:</span>{' '}
+          <span className="font-semibold text-[#666]">Dates on file:</span>{' '}
           {wasOn ? `on ${wasOn}` : `offered ${offered}`}
           {wasOn && offered ? ` · offered ${offered}` : ''}
         </p>

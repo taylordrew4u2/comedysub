@@ -13,6 +13,10 @@ const okClass = 'border-[#2a2a2a] focus:border-[#DC143C] focus:ring-[#DC143C]/50
 const badClass = 'border-red-500/70 focus:border-red-500 focus:ring-red-500/50';
 const labelClass = 'block mb-1.5 text-xs font-semibold text-[#666] uppercase tracking-wider';
 
+/** The show's own account — where the DMs come from, so following it first
+ *  means ours doesn't land in a stranger's message requests. */
+const SHOW_INSTAGRAM = 'pinsandneedlescomedy';
+
 const MAX_HEADSHOT_BYTES = 8 * 1024 * 1024;
 /** Anything wider than this is shrunk before upload — see prepareHeadshot. */
 const MAX_HEADSHOT_EDGE = 1400;
@@ -515,6 +519,15 @@ export default function WebForm() {
         <p className="mx-auto mt-3 max-w-xs text-xs leading-relaxed text-[#666]">
           Remember: you&apos;ve agreed to bring at least two people if you&apos;re booked.
         </p>
+        <a
+          href={`https://instagram.com/${SHOW_INSTAGRAM}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-4 inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-[#2a2a2a] px-4 text-sm text-[#aaa] transition hover:border-[#DC143C] hover:text-white"
+        >
+          <span aria-hidden="true">◎</span>
+          Follow @{SHOW_INSTAGRAM}
+        </a>
         <p className="mt-4 font-mono text-xs text-[#444]">ref #{state.refId}</p>
       </div>
     );
@@ -641,7 +654,17 @@ export default function WebForm() {
           <FieldError id="instagram-error" message={problems.instagram} />
           {!problems.instagram && (
             <p className="mt-1.5 text-xs text-[#666]">
-              We message here as well as by email — keep an eye on your DMs and message requests.
+              We message here as well as by email — keep an eye on your DMs and message
+              requests.{' '}
+              <a
+                href={`https://instagram.com/${SHOW_INSTAGRAM}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#DC143C] underline underline-offset-2 hover:text-white"
+              >
+                Give us a follow
+              </a>{' '}
+              so we can see your page.
             </p>
           )}
         </div>
@@ -659,7 +682,7 @@ export default function WebForm() {
             aria-invalid={!!problems.location}
             aria-describedby={problems.location ? 'location-error' : undefined}
             className={`${inputClass} ${problems.location ? badClass : okClass}`}
-            placeholder="e.g. Glasgow"
+            placeholder="e.g. Brooklyn"
           />
           <FieldError id="location-error" message={problems.location} />
         </div>

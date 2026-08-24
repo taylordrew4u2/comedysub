@@ -4,7 +4,7 @@ import WebForm from './_components/WebForm';
 export const metadata: Metadata = {
   title: 'Pins & Needles — Apply to Perform',
   description:
-    'Scottish stand-up comedian? Apply to perform at Pins & Needles. Submit your set video — we book from these all year.',
+    'Stand-up comedian? Apply to perform at Pins & Needles, the tattoo comedy show in Brooklyn. Submit your set video — we book from these all year.',
 };
 
 /*
@@ -28,7 +28,7 @@ export default function HomePage() {
           <span className="text-xs font-bold tracking-widest text-[#DC143C] uppercase">
             Pins &amp; Needles
           </span>
-          <span className="shrink-0 text-xs text-[#444]">Comedy Show</span>
+          <span className="shrink-0 text-xs text-[#444]">Brooklyn, NY</span>
         </div>
       </header>
 
@@ -38,19 +38,19 @@ export default function HomePage() {
           {/* ── Primary CTA block ── */}
           <div className="mb-8 pt-8 sm:mb-10 sm:pt-16">
             <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-[#DC143C] sm:tracking-[0.25em]">
-              Open Call · Scotland
+              Open Call · New York
             </p>
             {/* Steps up in three stops so 13 characters never overflow a 320px screen. */}
             <h1 className="mb-4 text-[2.25rem] font-extrabold leading-[1.05] tracking-tight min-[400px]:text-5xl sm:text-7xl">
-              Scottish<br />
+              New York<br />
               <span className="text-[#DC143C]">stand-ups</span><br />
               — apply here.
             </h1>
             <p className="max-w-md text-base leading-relaxed text-[#888]">
-              We&apos;re booking Scottish stand-up comedians for Pins &amp; Needles.
-              Send your set video whenever you like — we book from these as shows
-              come up, and we&apos;ll message you on Instagram or by email if
-              you&apos;re selected, so keep an eye on both.
+              We&apos;re booking stand-ups for Pins &amp; Needles — the tattoo comedy
+              show in Brooklyn. Send your set video whenever you like; we book from
+              these for upcoming shows, and we&apos;ll message you on Instagram or by
+              email if you&apos;re in, so keep an eye on both.
             </p>
 
             {isOpen && (

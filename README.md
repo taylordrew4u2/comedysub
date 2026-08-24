@@ -1,6 +1,6 @@
 # Pins & Needles — Submissions
 
-A Next.js submission platform for comedians applying to **Pins & Needles**, the tattoo-fuelled comedy showcase. It's an open call — comedians apply whenever, and you book from the pile as shows come up.
+A Next.js submission platform for comedians applying to **Pins & Needles**, the tattoo comedy show in Brooklyn, NY. It's an open call — comedians apply whenever, and you book from the pile for upcoming shows.
 
 Built entirely on **free tiers**: Vercel Hobby plan + Vercel Postgres (Neon). No paid services required.
 
@@ -51,8 +51,8 @@ In Vercel project → **Settings** → **Environment Variables**, add these (all
 | `BLOB_READ_WRITE_TOKEN` | Optional | Enables headshot uploads. Get from Vercel Storage → Blob. |
 | `APPLICATIONS_OPEN` | Optional | Set to `false` to show an "Applications Closed" message on the public page. |
 | `CLOSING_DATE` | Optional | Display a deadline notice, e.g. `31 July 2026`. |
-| `SHOW_VENUE` | Optional | Venue and address shown under the form, e.g. `The Raging Bull, 161 Lothian Rd, Edinburgh EH3 9AA`. Links to Google Maps. Leave unset and the details strip is hidden. |
-| `SHOW_TIME` | Optional | Shown beside the venue, e.g. `22:15 · Fridays`. |
+| `SHOW_VENUE` | Optional | Venue and address shown under the form, e.g. `Secret Pour, Brooklyn NY`. Links to Google Maps. Leave unset and the details strip is hidden. |
+| `SHOW_TIME` | Optional | Shown beside the venue, e.g. `Doors 8pm`. |
 
 ### Step 5 — Redeploy
 Go to **Deployments** → latest deployment → **Redeploy**. Done.
