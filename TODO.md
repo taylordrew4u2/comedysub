@@ -27,6 +27,7 @@
 - [x] Booked contacts list (names + emails), with each comedian's nights behind a toggle
 - [x] Print the lineup grouped by night, so the door reads one night at a time
 - [x] Template editor asks before throwing away unsaved changes
+- [x] Retire the Fringe framing — open call, no fixed dates, venue set by env var
 
 ## Up Next
 - [ ] Send confirmation email to comedian on submission

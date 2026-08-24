@@ -3,7 +3,6 @@
 import { useActionState, useCallback, useEffect, useRef, useState } from 'react';
 import { submitWebForm, type SubmitState } from '../actions';
 import { instagramUrl, toHttpUrl } from '../lib/normalize';
-import { nightParts } from '../lib/nights';
 
 const initial: SubmitState = {};
 
@@ -51,7 +50,7 @@ const EMPTY: Fields = {
  * from the comedian's side, the Apply button simply does nothing. So validation
  * lives here, points at the visible control, and says what to fix.
  */
-type FieldKey = keyof Fields | 'availability' | 'agreed' | 'headshot';
+type FieldKey = keyof Fields | 'agreed' | 'headshot';
 type Problems = Partial<Record<FieldKey, string>>;
 
 /** Form order, so "the first problem" is the topmost one on screen. */
@@ -61,19 +60,13 @@ const FIELD_ORDER: FieldKey[] = [
   'video_url',
   'instagram',
   'location',
-  'availability',
   'multiple_shows',
   'has_tattoos',
   'headshot',
   'agreed',
 ];
 
-function validate(
-  fields: Fields,
-  availability: string[],
-  agreed: boolean,
-  headshot: File | null,
-): Problems {
+function validate(fields: Fields, agreed: boolean, headshot: File | null): Problems {
   const problems: Problems = {};
 
   if (!fields.name.trim()) problems.name = 'Tell us your name.';
@@ -94,10 +87,7 @@ function validate(
   }
 
   if (!fields.location.trim()) problems.location = 'Let us know where you’re based.';
-  if (!availability.length) problems.availability = 'Pick at least one night you can perform.';
-  if (availability.length > 1 && !fields.multiple_shows) {
-    problems.multiple_shows = 'Pick one — more than one show, or just the one.';
-  }
+  if (!fields.multiple_shows) problems.multiple_shows = 'Pick one — happy to, or one is plenty.';
   if (!fields.has_tattoos) problems.has_tattoos = 'Let us know either way.';
   if (!headshot) problems.headshot = 'Add a headshot.';
   // The one condition of playing the show, so it gates the form rather than
@@ -147,15 +137,7 @@ async function prepareHeadshot(file: File): Promise<File> {
 // they've typed so coming back doesn't mean starting over.
 const DRAFT_KEY = 'pins-needles-draft-v1';
 
-type Draft = { fields: Partial<Fields>; availability: string[]; agreed?: boolean };
-
-/** Drafts written when the picker dealt in day numbers rather than labels. */
-function draftNights(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((v) => (typeof v === 'number' ? `Aug ${v}` : v))
-    .filter((v): v is string => typeof v === 'string');
-}
+type Draft = { fields: Partial<Fields>; agreed?: boolean };
 
 function readDraft(): Draft | null {
   try {
@@ -166,11 +148,7 @@ function readDraft(): Draft | null {
     const fields = { ...(parsed.fields ?? {}) };
     // Drafts written before multiple_shows moved in with the other fields.
     if (!fields.multiple_shows && parsed.multipleShows) fields.multiple_shows = parsed.multipleShows;
-    return {
-      fields,
-      availability: draftNights(parsed.availability),
-      agreed: parsed.agreed === true,
-    };
+    return { fields, agreed: parsed.agreed === true };
   } catch {
     // Private browsing, disabled storage, or corrupt JSON — drafts are a bonus.
     return null;
@@ -193,106 +171,6 @@ function FieldError({ id, message }: { id: string; message?: string }) {
       <span aria-hidden="true">✗</span>
       {message}
     </p>
-  );
-}
-
-function AvailabilityPicker({
-  nights,
-  selected,
-  setSelected,
-  error,
-  groupRef,
-}: {
-  /** Only the nights still open — the admin can shut one at any time. */
-  nights: string[];
-  selected: string[];
-  setSelected: (next: string[]) => void;
-  error?: string;
-  groupRef: React.RefObject<HTMLDivElement | null>;
-}) {
-  const allSelected = selected.length === nights.length;
-
-  function toggle(night: string) {
-    // Kept in show order however they were tapped.
-    const wanted = new Set(selected);
-    if (!wanted.delete(night)) wanted.add(night);
-    setSelected(nights.filter((n) => wanted.has(n)));
-  }
-
-  return (
-    <div>
-      <div className="mb-1.5 flex items-center justify-between gap-3">
-        <span className={`${labelClass} mb-0`}>Available dates *</span>
-        {/* -my-2 py-2 keeps the tap target ~44px tall without adding visible height. */}
-        <div className="-my-2 flex shrink-0 items-center gap-3">
-          {selected.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setSelected([])}
-              className="px-1 py-2 text-xs font-semibold text-[#666] underline underline-offset-4 transition hover:text-white"
-            >
-              Clear
-            </button>
-          )}
-          {!allSelected && (
-            <button
-              type="button"
-              onClick={() => setSelected([...nights])}
-              className="px-1 py-2 text-xs font-semibold text-[#DC143C] underline underline-offset-4 transition hover:text-white"
-            >
-              Select all
-            </button>
-          )}
-        </div>
-      </div>
-      <p className="mb-2.5 text-xs text-[#555]">
-        {selected.length > 0
-          ? `${selected.length} date${selected.length === 1 ? '' : 's'} selected`
-          : // The range is read off the open nights: a full night is taken out of
-            // the list, and the hint would otherwise still promise it.
-            `Tap the nights you can perform${
-              nights.length ? ` (${nights[0]}–${nights[nights.length - 1].replace(/^\D+/, '')})` : ''
-            }.`}
-      </p>
-
-      <div
-        ref={groupRef}
-        tabIndex={-1}
-        className="grid grid-cols-5 gap-2 focus:outline-none sm:grid-cols-7"
-        role="group"
-        aria-label="Available dates in August"
-        aria-describedby={error ? 'availability-error' : undefined}
-      >
-        {nights.map((night) => {
-          const { month, day } = nightParts(night);
-          return (
-          <label key={night} className="cursor-pointer">
-            <input
-              type="checkbox"
-              name="availability"
-              value={night}
-              checked={selected.includes(night)}
-              onChange={() => toggle(night)}
-              className="peer sr-only"
-            />
-            <span
-              /* Softer than a single field's outline — thirteen tiles at full
-                 strength shout, and the message below already says it. */
-              className={`flex h-12 w-full select-none flex-col items-center justify-center rounded-lg border bg-[#0a0a0a] text-sm font-semibold text-[#555] transition peer-checked:border-[#DC143C] peer-checked:bg-[#DC143C]/15 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-[#DC143C] ${
-                error ? 'border-red-500/40' : 'border-[#2a2a2a]'
-              }`}
-            >
-              {month && (
-                <span className="text-[9px] uppercase tracking-wider opacity-60">{month}</span>
-              )}
-              {day}
-            </span>
-          </label>
-          );
-        })}
-      </div>
-      <FieldError id="availability-error" message={error} />
-    </div>
   );
 }
 
@@ -471,10 +349,9 @@ function HeadshotField({
   );
 }
 
-export default function WebForm({ nights }: { nights: string[] }) {
+export default function WebForm() {
   const [state, formAction, isPending] = useActionState(submitWebForm, initial);
   const [fields, setFields] = useState<Fields>(EMPTY);
-  const [availability, setAvailability] = useState<string[]>([]);
   const [agreed, setAgreed] = useState(false);
   const [headshot, setHeadshot] = useState<File | null>(null);
   const [problems, setProblems] = useState<Problems>({});
@@ -482,7 +359,6 @@ export default function WebForm({ nights }: { nights: string[] }) {
   const topRef = useRef<HTMLDivElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const headshotRef = useRef<HTMLInputElement>(null);
-  const datesRef = useRef<HTMLDivElement>(null);
   const multiRef = useRef<HTMLDivElement>(null);
   const tattooRef = useRef<HTMLDivElement>(null);
   const agreedRef = useRef<HTMLInputElement>(null);
@@ -496,18 +372,14 @@ export default function WebForm({ nights }: { nights: string[] }) {
    * mount is the case the set-state-in-effect rule exempts — it costs one
    * extra render, once, and only when a draft exists.
    */
-  /* Restoring happens once, against the nights on offer at the time; re-running
-     it because a night closed would fight whatever they've picked since. */
-  /* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const draft = readDraft();
     hydrated.current = true;
     if (!draft) return;
 
-    // A night that has closed since they started is quietly dropped.
-    const days = draft.availability.filter((d) => nights.includes(d));
     const restored: Fields = { ...EMPTY };
-    let found = days.length > 0 || draft.agreed === true;
+    let found = draft.agreed === true;
 
     (Object.keys(EMPTY) as (keyof Fields)[]).forEach((key) => {
       const value = draft.fields[key];
@@ -526,26 +398,24 @@ export default function WebForm({ nights }: { nights: string[] }) {
     });
 
     if (!found) return;
-    setAvailability(days);
     setAgreed(draft.agreed === true);
     setFields(restored);
     setDraftRestored(true);
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const saveDraft = useCallback(() => {
     if (!hydrated.current) return;
     const empty =
-      availability.length === 0 &&
       !agreed &&
       (Object.keys(EMPTY) as (keyof Fields)[]).every((k) => !fields[k]);
     try {
       if (empty) localStorage.removeItem(DRAFT_KEY);
-      else localStorage.setItem(DRAFT_KEY, JSON.stringify({ fields, availability, agreed }));
+      else localStorage.setItem(DRAFT_KEY, JSON.stringify({ fields, agreed }));
     } catch {
       /* storage unavailable — the form still works, it just won't persist */
     }
-  }, [fields, availability, agreed]);
+  }, [fields, agreed]);
 
   useEffect(() => {
     saveDraft();
@@ -575,7 +445,6 @@ export default function WebForm({ nights }: { nights: string[] }) {
   function startOver() {
     clearDraft();
     setFields(EMPTY);
-    setAvailability([]);
     setAgreed(false);
     setHeadshot(null);
     setProblems({});
@@ -589,9 +458,7 @@ export default function WebForm({ nights }: { nights: string[] }) {
     const key = FIELD_ORDER.find((f) => found[f]);
     if (!key) return;
     const target =
-      key === 'availability'
-        ? datesRef.current
-        : key === 'multiple_shows'
+      key === 'multiple_shows'
           ? multiRef.current
           : key === 'has_tattoos'
             ? tattooRef.current
@@ -606,7 +473,7 @@ export default function WebForm({ nights }: { nights: string[] }) {
   }
 
   function handleSubmit(formData: FormData) {
-    const found = validate(fields, availability, agreed, headshot);
+    const found = validate(fields, agreed, headshot);
     setProblems(found);
     if (Object.keys(found).length) {
       goToFirstProblem(found);
@@ -798,35 +665,19 @@ export default function WebForm({ nights }: { nights: string[] }) {
         </div>
       </div>
 
-      <AvailabilityPicker
-        nights={nights}
-        selected={availability}
-        setSelected={(next) => {
-          setAvailability(next);
-          clearProblem('availability');
-          if (next.length < 2) clearProblem('multiple_shows');
-        }}
-        error={problems.availability}
-        groupRef={datesRef}
+      <ChoiceField
+        name="multiple_shows"
+        label="Happy to play more than one show? *"
+        options={[
+          { value: 'yes', label: 'Yes please' },
+          { value: 'no', label: 'Just the one' },
+        ]}
+        value={fields.multiple_shows}
+        onChange={(v) => setField('multiple_shows', v)}
+        error={problems.multiple_shows}
+        groupRef={multiRef}
+        boxed
       />
-
-      {/* Only worth asking once someone has offered more than one night, so it
-          appears with the second date and disappears again if they drop back. */}
-      {availability.length > 1 && (
-        <ChoiceField
-          name="multiple_shows"
-          label={`You're free on ${availability.length} nights — want more than one show? *`}
-          options={[
-            { value: 'yes', label: 'Yes please' },
-            { value: 'no', label: 'Just one' },
-          ]}
-          value={fields.multiple_shows}
-          onChange={(v) => setField('multiple_shows', v)}
-          error={problems.multiple_shows}
-          groupRef={multiRef}
-          boxed
-        />
-      )}
 
       <ChoiceField
         name="has_tattoos"

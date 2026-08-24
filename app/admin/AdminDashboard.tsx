@@ -14,8 +14,6 @@ import {
   adminLogout,
   deleteSubmissionAction,
   saveNotesAction,
-  setBookedDatesAction,
-  setClosedNightsAction,
   setStatusAction,
   type DeleteState,
   type UpdateState,
@@ -26,7 +24,6 @@ import {
   type SubmissionStatus,
 } from '../lib/db';
 import { instagramUrl, normalizeInstagram, toHttpUrl } from '../lib/normalize';
-import { SHOW_NIGHTS, splitNights } from '../lib/nights';
 
 const STATUS_OPTIONS: readonly SubmissionStatus[] = SUBMISSION_STATUSES;
 
@@ -164,249 +161,14 @@ function FlagBadges({ sub }: { sub: Submission }) {
   );
 }
 
-/* ── Nights ──────────────────────────────────────────────────────────────────
- *
- * A booked comedian's `booked_dates` are the nights they're actually on, picked
- * from the dates they offered. Indexing those across everyone booked lets every
- * date chip say whether the night already has someone on it — which is a nudge,
- * not a block: more than one comic a night is normal.
- */
-
-const NIGHT_CHIP = 'rounded px-1.5 py-0.5 text-[10px] leading-tight whitespace-nowrap';
-const NIGHT_FREE = 'bg-[#1e1e1e] text-[#888]';
-/** Amber: somebody is already on that night. Still bookable, just not empty. */
-const NIGHT_TAKEN = 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30';
-const NIGHT_ON = 'bg-green-500/25 text-green-200 ring-1 ring-green-500/50';
-
-type NightIndex = Map<string, Submission[]>;
-
-/** Every night someone is booked on, with who. Only booked rows count — an
- *  applicant's dates are an offer, and un-booking someone frees their night. */
-function buildNights(submissions: Submission[]): NightIndex {
-  const nights: NightIndex = new Map();
-  submissions.forEach((sub) => {
-    if (sub.status !== 'booked') return;
-    splitNights(sub.booked_dates).forEach((date) => {
-      const on = nights.get(date);
-      if (on) on.push(sub);
-      else nights.set(date, [sub]);
-    });
-  });
-  return nights;
-}
-
-/** Who else is on that night — a comedian isn't a clash with themselves. */
-function othersOn(nights: NightIndex, date: string, exceptId: number): Submission[] {
-  return (nights.get(date) ?? []).filter((s) => s.id !== exceptId);
-}
-
-function nightTitle(date: string, others: Submission[]): string | undefined {
-  if (!others.length) return undefined;
-  return `${date}: ${others.map((s) => s.name).join(', ')} already booked`;
-}
-
-/** Read-only dates — what an applicant offered, coloured by what's taken. */
-function AvailabilityChips({ sub, nights }: { sub: Submission; nights: NightIndex }) {
-  const dates = splitNights(sub.availability);
-  if (!dates.length) return <span className="text-xs text-[#333]">—</span>;
-
-  return (
-    <div className="flex flex-wrap gap-1">
-      {dates.map((d) => {
-        const others = othersOn(nights, d, sub.id);
-        return (
-          <span
-            key={d}
-            title={nightTitle(d, others)}
-            className={`${NIGHT_CHIP} ${others.length ? NIGHT_TAKEN : NIGHT_FREE}`}
-          >
-            {d}
-            {others.length ? ` · ${others.length}` : ''}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
 /**
- * The same dates, tappable, for someone who's already booked — tap the nights
- * they're on. Saves per tap straight to the server action rather than through a
- * form, and holds the selection locally so the chip responds before the round
- * trip; a rejected save puts it back and says why.
- */
-function BookedNightPicker({ sub, nights }: { sub: Submission; nights: NightIndex }) {
-  const dates = useMemo(() => splitNights(sub.availability), [sub.availability]);
-  const [selected, setSelected] = useState<string[]>(() => splitNights(sub.booked_dates));
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  function toggle(date: string) {
-    const wanted = new Set(selected);
-    if (!wanted.delete(date)) wanted.add(date);
-    // Rebuilt from `dates` so the stored order always matches the offer order.
-    const next = dates.filter((d) => wanted.has(d));
-    const previous = selected;
-
-    setSelected(next);
-    setError(null);
-    startTransition(async () => {
-      const result = await setBookedDatesAction(sub.id, next);
-      if (result.error) {
-        setError(result.error);
-        setSelected(previous);
-      } else if (result.dates) {
-        setSelected(result.dates);
-      }
-    });
-  }
-
-  if (!dates.length) {
-    return <span className="text-xs text-[#333]">No dates given</span>;
-  }
-
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap gap-1">
-        {dates.map((d) => {
-          const on = selected.includes(d);
-          const others = othersOn(nights, d, sub.id);
-          return (
-            <button
-              key={d}
-              type="button"
-              aria-pressed={on}
-              disabled={isPending}
-              onClick={() => toggle(d)}
-              title={nightTitle(d, others)}
-              className={`${NIGHT_CHIP} flex min-h-11 items-center px-2.5 transition hover:ring-1 hover:ring-[#DC143C] disabled:opacity-60 lg:min-h-7 ${
-                on ? NIGHT_ON : others.length ? NIGHT_TAKEN : NIGHT_FREE
-              }`}
-            >
-              {on ? '✓ ' : ''}
-              {d}
-              {others.length ? ` · ${others.length}` : ''}
-            </button>
-          );
-        })}
-      </div>
-      <p
-        role="status"
-        aria-live="polite"
-        className={`text-[10px] leading-snug ${error ? 'text-red-400' : 'text-[#666]'}`}
-      >
-        {error ??
-          (selected.length
-            ? `On ${selected.length} night${selected.length === 1 ? '' : 's'}`
-            : 'Tap the nights they’re booked for')}
-      </p>
-    </div>
-  );
-}
-
-/**
- * Every night of the run: who's on it, and whether it's still taking
- * applications. Tapping a night closes it — the form stops offering it, and
- * anyone whose page was already open has the choice rejected on submit.
- *
- * Closing is a live change to the public form, so it saves on the tap and puts
- * itself back if the server says no; there's no Save button to forget.
- */
-function ShowNightsPanel({
-  nights,
-  closed,
-}: {
-  nights: NightIndex;
-  closed: string[];
-}) {
-  const [shut, setShut] = useState<string[]>(closed);
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  function toggle(night: string) {
-    const wanted = new Set(shut);
-    if (!wanted.delete(night)) wanted.add(night);
-    const next = SHOW_NIGHTS.filter((n) => wanted.has(n));
-    const previous = shut;
-
-    setShut(next);
-    setError(null);
-    startTransition(async () => {
-      const result = await setClosedNightsAction(next);
-      if (result.error) {
-        setError(result.error);
-        setShut(previous);
-      } else if (result.closed) {
-        setShut(result.closed);
-      }
-    });
-  }
-
-  const openCount = SHOW_NIGHTS.length - shut.length;
-
-  return (
-    <div className="mb-6 rounded-xl border border-[#1e1e1e] bg-[#111] px-4 py-3">
-      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-[#555]">
-          Show nights
-        </p>
-        <p className="text-[11px] text-[#666]">
-          {openCount} open{shut.length > 0 ? ` · ${shut.length} closed to new applicants` : ''}
-        </p>
-      </div>
-
-      <div className="flex flex-wrap gap-1.5">
-        {SHOW_NIGHTS.map((night) => {
-          const on = nights.get(night) ?? [];
-          const isShut = shut.includes(night);
-          return (
-            <button
-              key={night}
-              type="button"
-              aria-pressed={!isShut}
-              disabled={isPending}
-              onClick={() => toggle(night)}
-              title={
-                isShut
-                  ? `${night} is closed — tap to reopen it`
-                  : `${night}${on.length ? `: ${on.map((s) => s.name).join(', ')}` : ''} — tap to close it to new applicants`
-              }
-              className={`${NIGHT_CHIP} flex min-h-11 items-center px-2.5 transition hover:ring-1 hover:ring-[#DC143C] disabled:opacity-60 lg:min-h-8 ${
-                isShut
-                  ? 'bg-[#141414] text-[#555] line-through ring-1 ring-[#2a2a2a]'
-                  : on.length
-                    ? NIGHT_TAKEN
-                    : NIGHT_FREE
-              }`}
-            >
-              {night}
-              {on.length ? ` · ${on.length}` : ''}
-            </button>
-          );
-        })}
-      </div>
-
-      <p
-        role="status"
-        aria-live="polite"
-        className={`mt-2 text-[11px] leading-snug ${error ? 'text-red-400' : 'text-[#666]'}`}
-      >
-        {error ??
-          'Tap a night to close it to new applicants — it disappears from the form. Amber means someone is already on it; it stays open either way.'}
-      </p>
-    </div>
-  );
-}
-
-/**
- * Every booked comedian's name and email, and nothing else until you ask.
+ * Every booked comedian's name and email, in one block.
  *
  * It's the list you work from when you're writing to the lineup, so it stays
- * one line per person: the nights are a row you open, not a column that pushes
- * the addresses out of a clean copy-paste.
+ * one line per person and nothing else — the addresses stay in a shape you can
+ * drag-select, and the button hands you the whole set at once.
  */
 function BookedContacts({ booked }: { booked: Submission[] }) {
-  const [openId, setOpenId] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
 
   const withEmail = booked.filter((s) => s.email);
@@ -437,55 +199,22 @@ function BookedContacts({ booked }: { booked: Submission[] }) {
 
       <div className="border-t border-[#1a1a1a] px-4 py-3">
         <ul className="flex flex-col divide-y divide-[#1a1a1a]">
-          {booked.map((sub) => {
-            const on = splitNights(sub.booked_dates);
-            const isOpen = openId === sub.id;
-            return (
-              <li key={sub.id} className="py-2">
-                <div className="flex items-center gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm text-white">{sub.name}</p>
-                    {sub.email ? (
-                      <a
-                        href={`mailto:${sub.email}`}
-                        className="block truncate text-xs text-[#DC143C] hover:underline"
-                        title={sub.email}
-                      >
-                        {sub.email}
-                      </a>
-                    ) : (
-                      <p className="text-xs text-[#444]">no email</p>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    aria-expanded={isOpen}
-                    onClick={() => setOpenId(isOpen ? null : sub.id)}
-                    className={`min-h-11 shrink-0 rounded-lg border border-[#2a2a2a] px-3 text-[11px] font-semibold transition hover:border-[#DC143C] hover:text-white sm:min-h-0 sm:py-1.5 ${
-                      isOpen ? 'text-white' : 'text-[#666]'
-                    }`}
-                  >
-                    {isOpen ? 'Hide nights' : 'Nights'}
-                  </button>
-                </div>
-                {isOpen && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {on.length ? (
-                      on.map((night) => (
-                        <span key={night} className={`${NIGHT_CHIP} ${NIGHT_ON}`}>
-                          {night}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="text-[11px] text-[#666]">
-                        No nights picked yet — set them on their row below.
-                      </span>
-                    )}
-                  </div>
-                )}
-              </li>
-            );
-          })}
+          {booked.map((sub) => (
+            <li key={sub.id} className="py-2">
+              <p className="truncate text-sm text-white">{sub.name}</p>
+              {sub.email ? (
+                <a
+                  href={`mailto:${sub.email}`}
+                  className="block truncate text-xs text-[#DC143C] hover:underline"
+                  title={sub.email}
+                >
+                  {sub.email}
+                </a>
+              ) : (
+                <p className="text-xs text-[#444]">no email</p>
+              )}
+            </li>
+          ))}
         </ul>
 
         {withEmail.length > 0 && (
@@ -694,12 +423,26 @@ function NotesForm({ sub }: { sub: Submission }) {
 
 /** The notes + delete panel, shared by the desktop row and the phone card. */
 function EditPanel({ sub }: { sub: Submission }) {
+  // Only festival-era records carry these, and only here: the dates are history
+  // rather than something to act on, but hiding them would lose the record.
+  const offered = sub.availability?.trim();
+  const wasOn = sub.booked_dates?.trim();
+
   return (
+    <div className="flex flex-col gap-3">
+      {(offered || wasOn) && (
+        <p className="text-[11px] leading-snug text-[#555]">
+          <span className="font-semibold text-[#666]">From the Fringe run:</span>{' '}
+          {wasOn ? `on ${wasOn}` : `offered ${offered}`}
+          {wasOn && offered ? ` · offered ${offered}` : ''}
+        </p>
+      )}
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
       <div className="min-w-0 flex-1 sm:max-w-2xl">
         <NotesForm sub={sub} />
       </div>
       <DeleteForm sub={sub} />
+    </div>
     </div>
   );
 }
@@ -707,11 +450,9 @@ function EditPanel({ sub }: { sub: Submission }) {
 /* Mobile/tablet view — a tappable card per submission instead of a wide table. */
 function SubmissionCard({
   sub,
-  nights,
   onStatusSaved,
 }: {
   sub: Submission;
-  nights: NightIndex;
   onStatusSaved?: (sub: Submission, status: SubmissionStatus) => void;
 }) {
   // Normalised at render so rows saved before normalisation existed link correctly.
@@ -800,18 +541,7 @@ function SubmissionCard({
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5">
         <FlagBadges sub={sub} />
-        {sub.status !== 'booked' && <AvailabilityChips sub={sub} nights={nights} />}
       </div>
-
-      {/* Booked comedians get the picker instead — same dates, tap to set. */}
-      {sub.status === 'booked' && (
-        <div className="mt-3 rounded-lg border border-[#1e1e1e] bg-[#0a0a0a] p-3">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[#555]">
-            Nights they’re on
-          </p>
-          <BookedNightPicker sub={sub} nights={nights} />
-        </div>
-      )}
 
       {sub.questions && (
         <div className="mt-3 rounded-lg border border-[#2a2a2a] bg-[#0a0a0a] p-3">
@@ -854,11 +584,9 @@ function SubmissionCard({
  */
 function SubmissionRow({
   sub,
-  nights,
   onStatusSaved,
 }: {
   sub: Submission;
-  nights: NightIndex;
   onStatusSaved?: (sub: Submission, status: SubmissionStatus) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -933,14 +661,6 @@ function SubmissionRow({
         </td>
 
         <td className="px-3 py-3">
-          {sub.status === 'booked' ? (
-            <BookedNightPicker sub={sub} nights={nights} />
-          ) : (
-            <AvailabilityChips sub={sub} nights={nights} />
-          )}
-        </td>
-
-        <td className="px-3 py-3">
           <FlagBadges sub={sub} />
         </td>
 
@@ -976,7 +696,7 @@ function SubmissionRow({
 
       {sub.questions && (
         <tr>
-          <td colSpan={6} className="px-3 pb-3">
+          <td colSpan={5} className="px-3 pb-3">
             <div className="rounded border-l-2 border-[#DC143C]/60 bg-[#0f0f0f] py-2 pr-3 pl-3">
               <p className="text-[10px] font-semibold tracking-wider uppercase text-[#DC143C]">
                 Asked a question
@@ -991,7 +711,7 @@ function SubmissionRow({
 
       {open && (
         <tr>
-          <td colSpan={6} className="px-3 pb-4">
+          <td colSpan={5} className="px-3 pb-4">
             <div className="rounded-lg border border-[#1e1e1e] bg-[#0f0f0f] p-3">
               <EditPanel sub={sub} />
             </div>
@@ -1037,13 +757,7 @@ function sortSubmissions(items: Submission[], sort: SortKey): Submission[] {
   }
 }
 
-export default function AdminDashboard({
-  submissions,
-  closedNights,
-}: {
-  submissions: Submission[];
-  closedNights: string[];
-}) {
+export default function AdminDashboard({ submissions }: { submissions: Submission[] }) {
   const [tab, setTab] = useState<TabKey>('applicants');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -1066,9 +780,6 @@ export default function AdminDashboard({
   const place: Place =
     tab === 'booked' ? 'booked' : statusFilter === 'declined' ? 'declined' : 'applicants';
   const scoped = byPlace[place];
-
-  /* Built from every booked comedian, so both tabs colour dates the same way. */
-  const nights = useMemo(() => buildNights(submissions), [submissions]);
 
   /* Search next, so the stat cards can count within the current search. */
   const query = search.trim().toLowerCase();
@@ -1322,8 +1033,6 @@ export default function AdminDashboard({
           </div>
         )}
 
-        <ShowNightsPanel nights={nights} closed={closedNights} />
-
         {/* ── Search / sort ── */}
         <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
           <div className="relative w-full sm:max-w-md">
@@ -1451,7 +1160,6 @@ export default function AdminDashboard({
                   <SubmissionCard
                     key={sub.id}
                     sub={sub}
-                    nights={nights}
                     onStatusSaved={handleStatusSaved}
                   />
                 ))}
@@ -1463,12 +1171,11 @@ export default function AdminDashboard({
               <div className="hidden rounded-xl border border-[#1e1e1e] lg:block">
                 <table className="w-full table-fixed text-sm">
                   <colgroup>
-                    <col className="w-[30%]" />
-                    <col className="w-[12%]" />
-                    <col className="w-[22%]" />
-                    <col className="w-[12%]" />
-                    <col className="w-[8%]" />
-                    <col className="w-[16%]" />
+                    <col className="w-[34%]" />
+                    <col className="w-[20%]" />
+                    <col className="w-[18%]" />
+                    <col className="w-[10%]" />
+                    <col className="w-[18%]" />
                   </colgroup>
                   <thead>
                     {/* Sticky under the admin bar: the header of a long list is
@@ -1476,7 +1183,6 @@ export default function AdminDashboard({
                     <tr className="text-left text-[10px] font-semibold uppercase tracking-wider text-[#555] [&>th:first-child]:rounded-tl-xl [&>th:last-child]:rounded-tr-xl [&>th]:sticky [&>th]:top-[var(--admin-header-h)] [&>th]:z-10 [&>th]:bg-[#111] [&>th]:px-3 [&>th]:py-3 [&>th]:shadow-[inset_0_-1px_0_#1e1e1e]">
                       <th>Comedian</th>
                       <th>Links</th>
-                      <th>Nights</th>
                       <th>Answers</th>
                       <th>Sent</th>
                       <th>Status</th>
@@ -1486,7 +1192,6 @@ export default function AdminDashboard({
                     <SubmissionRow
                       key={sub.id}
                       sub={sub}
-                      nights={nights}
                       onStatusSaved={handleStatusSaved}
                     />
                   ))}
