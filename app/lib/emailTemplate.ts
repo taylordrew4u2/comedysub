@@ -26,8 +26,6 @@ export const PLACEHOLDERS: Placeholder[] = [
     },
   },
   { token: 'location', label: 'Location', value: (s) => s.location ?? '' },
-  { token: 'availability', label: 'Dates they picked', value: (s) => s.availability },
-  { token: 'booked_dates', label: 'Nights they’re on', value: (s) => s.booked_dates ?? '' },
   { token: 'video', label: 'Video link', value: (s) => toHttpUrl(s.video_url) ?? s.video_url ?? '' },
   { token: 'status', label: 'Current status', value: (s) => s.status },
   { token: 'ref', label: 'Reference number', value: (s) => `#${s.id}` },
@@ -76,7 +74,7 @@ export const SAMPLE_SUBMISSION: Submission = {
   email: 'sam@example.com',
   instagram: 'sam.example',
   location: 'Glasgow',
-  availability: '6 Aug, 9 Aug',
+  availability: '',
   booked_dates: null,
   video_url: 'https://youtube.com/watch?v=example',
   headshot_url: null,
@@ -112,11 +110,9 @@ export const STARTER_TEMPLATES: { name: string; subject: string; body: string }[
     subject: 'Pins & Needles — you’re in!',
     body: `Hi {{first_name}},
 
-Great news — we'd love to have you on Pins & Needles at the Edinburgh Fringe.
+Great news — we'd love to have you on Pins & Needles.
 
-You're pencilled in for {{availability}} at The Raging Bull, 22:15. Doors are at 22:00, and you'll have a ten minute set.
-
-Just reply to confirm you're still good for those dates and I'll send over the details.
+Reply and let me know which upcoming dates suit you, and I'll send over the venue, the running time and everything else you need.
 
 Cheers,
 Pins & Needles`,
@@ -128,7 +124,7 @@ Pins & Needles`,
 
 Thanks for sending your tape over for Pins & Needles — we watched it and really appreciate you applying.
 
-We've filled the run this year, so it's a no from us this time. Please do send something again next year; we'd like to see more.
+It's a no from us this time, but we book from these all year — please do send something again; we'd like to see more.
 
 All the best,
 Pins & Needles`,
@@ -141,7 +137,7 @@ Pins & Needles`,
 Thanks for applying to Pins & Needles — your submission ({{ref}}) is with us and we're working through the tapes.
 
 Before we decide, could you let us know:
-- Are you still free on {{availability}}?
+- Which dates are you generally free?
 - Do you have a longer clip we could watch?
 
 Cheers,

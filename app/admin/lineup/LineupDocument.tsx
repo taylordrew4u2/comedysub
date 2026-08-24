@@ -1,16 +1,15 @@
 import Link from 'next/link';
 import type { Submission } from '../../lib/db';
 import { instagramUrl, normalizeInstagram, toHttpUrl } from '../../lib/normalize';
-import { byNight, splitNights } from '../../lib/nights';
 import PrintButton from './PrintButton';
 
 /*
  * The printable document itself, split from the page so it can be rendered with
  * fixture data without a live database behind it.
  *
- * Grouped by night rather than listed flat: on the door this is read one night
- * at a time, and "who's on tonight" shouldn't mean scanning every entry for a
- * date. Someone booked on two nights appears under both — they're on both.
+ * One list, in booking order. It grouped by night while the run was a fixed
+ * thirteen dates; an open call has no dates to group by, so the grouping went
+ * with them.
  */
 export default function LineupDocument({
   booked,
@@ -21,24 +20,6 @@ export default function LineupDocument({
   printedOn: string;
   dbError?: boolean;
 }) {
-  const nights = new Map<string, Submission[]>();
-  const undated: Submission[] = [];
-
-  booked.forEach((sub) => {
-    const on = splitNights(sub.booked_dates);
-    if (!on.length) {
-      undated.push(sub);
-      return;
-    }
-    on.forEach((night) => {
-      const list = nights.get(night);
-      if (list) list.push(sub);
-      else nights.set(night, [sub]);
-    });
-  });
-
-  const running = [...nights.entries()].sort((a, b) => byNight(a[0], b[0]));
-
   return (
     <div className="lineup min-h-dvh bg-white text-black">
       {/* Toolbar — screen only, never printed. */}
@@ -57,14 +38,9 @@ export default function LineupDocument({
       <main className="mx-auto max-w-3xl px-6 py-8 print:px-0 print:py-0">
         <header className="mb-8 border-b-2 border-black pb-4">
           <h1 className="text-3xl font-extrabold tracking-tight">Pins &amp; Needles</h1>
-          <p className="mt-1 text-sm text-neutral-600">
-            Booked lineup · The Raging Bull, Edinburgh Fringe · 22:15, Aug 6–18
-          </p>
+          <p className="mt-1 text-sm text-neutral-600">Booked lineup</p>
           <p className="mt-3 text-sm font-semibold">
             {booked.length} comedian{booked.length === 1 ? '' : 's'} booked
-            {running.length > 0 && (
-              <> across {running.length} night{running.length === 1 ? '' : 's'}</>
-            )}
             <span className="font-normal text-neutral-500"> · printed {printedOn}</span>
           </p>
         </header>
@@ -79,64 +55,21 @@ export default function LineupDocument({
             Booked in the dashboard and it will appear here.
           </p>
         ) : (
-          <>
-            {running.map(([night, on]) => (
-              <section key={night} className="mb-8">
-                {/* break-after-avoid keeps a night's heading with its first act. */}
-                <h2 className="mb-3 break-after-avoid border-b border-black pb-1 text-xl font-bold">
-                  {night}
-                  <span className="ml-2 text-sm font-normal text-neutral-600">
-                    {on.length} comedian{on.length === 1 ? '' : 's'}
-                  </span>
-                </h2>
-                <ol className="space-y-4">
-                  {on.map((sub, i) => (
-                    <ComedianCard key={sub.id} sub={sub} position={i + 1} night={night} />
-                  ))}
-                </ol>
-              </section>
+          <ol className="space-y-4">
+            {booked.map((sub, i) => (
+              <ComedianCard key={sub.id} sub={sub} position={i + 1} />
             ))}
-
-            {undated.length > 0 && (
-              <section className="mb-8">
-                <h2 className="mb-3 break-after-avoid border-b border-black pb-1 text-xl font-bold">
-                  Night not set
-                  <span className="ml-2 text-sm font-normal text-neutral-600">
-                    {undated.length} comedian{undated.length === 1 ? '' : 's'}
-                  </span>
-                </h2>
-                <p className="mb-3 text-sm text-neutral-600">
-                  Booked, but no night picked yet — set their nights on the dashboard and
-                  they&apos;ll move up into the running order.
-                </p>
-                <ol className="space-y-4">
-                  {undated.map((sub, i) => (
-                    <ComedianCard key={sub.id} sub={sub} position={i + 1} />
-                  ))}
-                </ol>
-              </section>
-            )}
-          </>
+          </ol>
         )}
       </main>
     </div>
   );
 }
 
-function ComedianCard({
-  sub,
-  position,
-  night,
-}: {
-  sub: Submission;
-  position: number;
-  /** Set when printed under a night, so the card can name their other ones. */
-  night?: string;
-}) {
+function ComedianCard({ sub, position }: { sub: Submission; position: number }) {
   const handle = normalizeInstagram(sub.instagram);
   const igHref = instagramUrl(sub.instagram);
   const videoHref = toHttpUrl(sub.video_url);
-  const alsoOn = night ? splitNights(sub.booked_dates).filter((n) => n !== night) : [];
 
   return (
     <li
@@ -156,10 +89,6 @@ function ComedianCard({
           <h3 className="text-lg font-bold">
             {position}. {sub.name}
           </h3>
-          {alsoOn.length > 0 && (
-            <p className="text-sm text-neutral-600">Also on {alsoOn.join(', ')}</p>
-          )}
-
           <dl className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
             <Row label="Email" value={sub.email} />
             <Row
@@ -168,7 +97,9 @@ function ComedianCard({
               href={igHref}
             />
             <Row label="Location" value={sub.location} />
-            <Row label="Available" value={sub.availability || null} />
+            {/* Festival-era records only — nothing writes these now. */}
+            <Row label="Booked for" value={sub.booked_dates || null} />
+            <Row label="Offered" value={sub.availability || null} />
             <Row
               label="Tattoos"
               value={

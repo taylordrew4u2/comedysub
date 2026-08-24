@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Pins & Needles — Edinburgh Fringe Submissions',
+  title: 'Pins & Needles — Submissions',
   description:
-    'Apply to perform at Pins & Needles, the tattoo-fuelled comedy showcase at Edinburgh Fringe.',
+    'Apply to perform at Pins & Needles, the tattoo-fuelled comedy showcase.',
   appleWebApp: {
     capable: true,
     title: 'Pins & Needles',

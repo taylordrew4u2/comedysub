@@ -7,69 +7,15 @@ import { del, put } from '@vercel/blob';
 import {
   deleteSubmission,
   deleteTemplate,
-  getClosedNights,
-  getSubmission,
   insertSubmission,
   insertTemplate,
   isSubmissionStatus,
-  setBookedDates,
-  setClosedNights,
   setNotes,
   setStatus,
   updateTemplate,
   type SubmissionStatus,
 } from './lib/db';
 import { normalizeInstagram, toHttpUrl } from './lib/normalize';
-import { SHOW_NIGHTS, byNight, joinNights } from './lib/nights';
-
-// ── Show nights ────────────────────────────────────────────────────────────────
-
-/**
- * The nights still taking applications, in show order.
- *
- * Falls back to every night if the settings can't be read: a database blip
- * should leave the form working, not silently close the show.
- */
-export async function openNights(): Promise<string[]> {
-  try {
-    const closed = new Set(await getClosedNights());
-    return SHOW_NIGHTS.filter((n) => !closed.has(n));
-  } catch (err) {
-    console.error('Could not read closed nights:', err);
-    return SHOW_NIGHTS;
-  }
-}
-
-export interface NightsState {
-  error?: string;
-  /** What the server stored, so the caller can settle on it. */
-  closed?: string[];
-}
-
-/** Admin-only: shuts a night to new applicants, or opens it again. */
-export async function setClosedNightsAction(nights: unknown): Promise<NightsState> {
-  if (!(await isAdmin())) {
-    return { error: 'Unauthorized' };
-  }
-  if (!Array.isArray(nights)) {
-    return { error: 'Missing nights.' };
-  }
-
-  // Rebuilt from the real list, so nothing outside the show can be stored.
-  const wanted = new Set(nights.filter((n): n is string => typeof n === 'string'));
-  const closed = SHOW_NIGHTS.filter((n) => wanted.has(n)).sort(byNight);
-
-  try {
-    await setClosedNights(closed);
-    revalidatePath('/admin');
-    // The public form reads this too — it has to change with it.
-    revalidatePath('/');
-    return { closed };
-  } catch (err) {
-    console.error('Closing nights failed:', err);
-    return { error: 'Failed to save which nights are open.' };
-  }
-}
 
 // ── Public Submission ──────────────────────────────────────────────────────────
 
@@ -93,24 +39,12 @@ export async function submitWebForm(
   const headshotFile = formData.get('headshot') as File | null;
   const questions = (formData.get('questions') as string)?.trim().slice(0, 1000) || null;
 
-  /*
-   * Nights are re-derived from the open list rather than trusted: a page opened
-   * before a night was closed still offers it, and the stored value should only
-   * ever contain labels the show actually runs, in show order.
-   */
-  const picked = new Set(formData.getAll('availability').map(String));
-  const open = await openNights();
-  const chosen = open.filter((n) => picked.has(n));
-  const availability = joinNights(chosen);
-
   const agreed_bring_two = formData.get('agreed') === 'on';
 
   const tattooAnswer = formData.get('has_tattoos');
   const has_tattoos =
     tattooAnswer === 'yes' ? true : tattooAnswer === 'no' ? false : null;
 
-  // Only asked when more than one date is offered, so only required then.
-  const dateCount = chosen.length;
   const multiShowAnswer = formData.get('multiple_shows');
   const multiple_shows =
     multiShowAnswer === 'yes' ? true : multiShowAnswer === 'no' ? false : null;
@@ -128,17 +62,9 @@ export async function submitWebForm(
   if (!video_url) missing.push('a video link');
   if (!instagram) missing.push('your Instagram');
   if (!location) missing.push('where you’re located');
-  // Said plainly rather than as "a missing field": they did pick a night, it
-  // just closed while the page was open.
-  if (!availability && picked.size) {
-    return {
-      error: 'Those nights have just closed — please pick from the dates still showing.',
-    };
-  }
-  if (!availability) missing.push('at least one available date');
   if (has_tattoos === null) missing.push('the tattoo question');
+  if (multiple_shows === null) missing.push('whether you want more than one show');
   if (!agreed_bring_two) missing.push('your agreement to bring two people');
-  if (dateCount > 1 && multiple_shows === null) missing.push('whether you want multiple shows');
   if (!headshotFile || headshotFile.size === 0) missing.push('a headshot');
 
   if (missing.length) {
@@ -176,7 +102,6 @@ export async function submitWebForm(
       email,
       instagram,
       location,
-      availability,
       video_url,
       headshot_url,
       has_tattoos,
@@ -240,7 +165,7 @@ export interface StatusState {
 
 /**
  * Moving someone along the pipeline is a single choice, so it saves on the spot
- * rather than behind a Save button — same direct-call shape as the night chips.
+ * rather than behind a Save button.
  */
 export async function setStatusAction(id: number, status: unknown): Promise<StatusState> {
   if (!(await isAdmin())) {
@@ -292,59 +217,6 @@ export async function saveNotesAction(
   } catch (err) {
     console.error('Notes update failed:', err);
     return { error: 'Failed to save the notes.' };
-  }
-}
-
-// ── Admin Booked Nights ────────────────────────────────────────────────────────
-
-export interface BookedDatesState {
-  error?: string;
-  /** What was actually stored, so the caller can settle on the server's answer
-   *  rather than on what it optimistically drew. */
-  dates?: string[];
-}
-
-/**
- * Sets which of a booked comedian's available nights they're on.
- *
- * Called straight from the client rather than through a form: the dates are
- * chips you toggle, and a whole form round-trip per tap would be heavier than
- * the change it saves. The list is re-derived from the stored availability, so
- * nobody ends up booked on a night they never offered.
- */
-export async function setBookedDatesAction(
-  id: number,
-  dates: unknown,
-): Promise<BookedDatesState> {
-  if (!(await isAdmin())) {
-    return { error: 'Unauthorized' };
-  }
-  if (!Number.isInteger(id) || !Array.isArray(dates)) {
-    return { error: 'Missing submission id or dates.' };
-  }
-
-  try {
-    const sub = await getSubmission(id);
-    if (!sub) return { error: 'That submission no longer exists.' };
-    if (sub.status !== 'booked') {
-      return { error: 'Mark them booked before picking their nights.' };
-    }
-
-    const wanted = new Set(dates.filter((d): d is string => typeof d === 'string'));
-    // Availability order is the order the form offered the nights in, so
-    // rebuilding from it both filters and sorts in one pass.
-    const kept = sub.availability
-      .split(',')
-      .map((d) => d.trim())
-      .filter((d) => d && wanted.has(d));
-
-    await setBookedDates(id, kept.join(', '));
-    revalidatePath('/admin');
-    revalidatePath('/admin/lineup');
-    return { dates: kept };
-  } catch (err) {
-    console.error('Booked dates update failed:', err);
-    return { error: 'Failed to save their nights.' };
   }
 }
 
