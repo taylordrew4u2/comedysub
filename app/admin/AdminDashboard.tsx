@@ -130,6 +130,7 @@ function Avatar({ sub, className = 'h-12 w-12 text-sm' }: { sub: Submission; cla
 function FlagBadges({ sub }: { sub: Submission }) {
   const flags: { key: string; label: string; className: string }[] = [];
 
+  // Older records only — the form stopped asking, so this is null on new ones.
   if (sub.agreed_bring_two === true) {
     flags.push({ key: 'plus2', label: '✓ Brings +2', className: 'bg-green-500/20 text-green-300' });
   } else if (sub.agreed_bring_two === false) {

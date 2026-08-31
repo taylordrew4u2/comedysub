@@ -52,7 +52,7 @@ const EMPTY: Fields = {
  * from the comedian's side, the Apply button simply does nothing. So validation
  * lives here, points at the visible control, and says what to fix.
  */
-type FieldKey = keyof Fields | 'agreed' | 'headshot';
+type FieldKey = keyof Fields | 'headshot';
 type Problems = Partial<Record<FieldKey, string>>;
 
 /** Form order, so "the first problem" is the topmost one on screen. */
@@ -64,10 +64,9 @@ const FIELD_ORDER: FieldKey[] = [
   'location',
   'has_tattoos',
   'headshot',
-  'agreed',
 ];
 
-function validate(fields: Fields, agreed: boolean, headshot: File | null): Problems {
+function validate(fields: Fields, headshot: File | null): Problems {
   const problems: Problems = {};
 
   if (!fields.name.trim()) problems.name = 'Tell us your name.';
@@ -90,9 +89,6 @@ function validate(fields: Fields, agreed: boolean, headshot: File | null): Probl
   if (!fields.location.trim()) problems.location = 'Let us know where you’re based.';
   if (!fields.has_tattoos) problems.has_tattoos = 'Let us know either way.';
   if (!headshot) problems.headshot = 'Add a headshot.';
-  // The one condition of playing the show, so it gates the form rather than
-  // being asked afterwards where the answer could be no.
-  if (!agreed) problems.agreed = 'We can only take you if you agree to this.';
 
   return problems;
 }
@@ -137,7 +133,7 @@ async function prepareHeadshot(file: File): Promise<File> {
 // they've typed so coming back doesn't mean starting over.
 const DRAFT_KEY = 'pins-needles-draft-v1';
 
-type Draft = { fields: Partial<Fields>; agreed?: boolean };
+type Draft = { fields: Partial<Fields> };
 
 function readDraft(): Draft | null {
   try {
@@ -145,7 +141,7 @@ function readDraft(): Draft | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Draft;
     if (!parsed || typeof parsed !== 'object') return null;
-    return { fields: { ...(parsed.fields ?? {}) }, agreed: parsed.agreed === true };
+    return { fields: { ...(parsed.fields ?? {}) } };
   } catch {
     // Private browsing, disabled storage, or corrupt JSON — drafts are a bonus.
     return null;
@@ -349,7 +345,6 @@ function HeadshotField({
 export default function WebForm() {
   const [state, formAction, isPending] = useActionState(submitWebForm, initial);
   const [fields, setFields] = useState<Fields>(EMPTY);
-  const [agreed, setAgreed] = useState(false);
   const [headshot, setHeadshot] = useState<File | null>(null);
   const [problems, setProblems] = useState<Problems>({});
   const [draftRestored, setDraftRestored] = useState(false);
@@ -357,7 +352,6 @@ export default function WebForm() {
   const formRef = useRef<HTMLFormElement>(null);
   const headshotRef = useRef<HTMLInputElement>(null);
   const tattooRef = useRef<HTMLDivElement>(null);
-  const agreedRef = useRef<HTMLInputElement>(null);
   // Guards the save effect from firing before the restore effect has run.
   const hydrated = useRef(false);
 
@@ -375,7 +369,7 @@ export default function WebForm() {
     if (!draft) return;
 
     const restored: Fields = { ...EMPTY };
-    let found = draft.agreed === true;
+    let found = false;
 
     (Object.keys(EMPTY) as (keyof Fields)[]).forEach((key) => {
       const value = draft.fields[key];
@@ -394,7 +388,6 @@ export default function WebForm() {
     });
 
     if (!found) return;
-    setAgreed(draft.agreed === true);
     setFields(restored);
     setDraftRestored(true);
   }, []);
@@ -402,16 +395,14 @@ export default function WebForm() {
 
   const saveDraft = useCallback(() => {
     if (!hydrated.current) return;
-    const empty =
-      !agreed &&
-      (Object.keys(EMPTY) as (keyof Fields)[]).every((k) => !fields[k]);
+    const empty = (Object.keys(EMPTY) as (keyof Fields)[]).every((k) => !fields[k]);
     try {
       if (empty) localStorage.removeItem(DRAFT_KEY);
-      else localStorage.setItem(DRAFT_KEY, JSON.stringify({ fields, agreed }));
+      else localStorage.setItem(DRAFT_KEY, JSON.stringify({ fields }));
     } catch {
       /* storage unavailable — the form still works, it just won't persist */
     }
-  }, [fields, agreed]);
+  }, [fields]);
 
   useEffect(() => {
     saveDraft();
@@ -441,7 +432,6 @@ export default function WebForm() {
   function startOver() {
     clearDraft();
     setFields(EMPTY);
-    setAgreed(false);
     setHeadshot(null);
     setProblems({});
     if (headshotRef.current) headshotRef.current.value = '';
@@ -456,18 +446,16 @@ export default function WebForm() {
     const target =
       key === 'has_tattoos'
         ? tattooRef.current
-        : key === 'agreed'
-          ? agreedRef.current
-          : key === 'headshot'
-            ? formRef.current?.querySelector<HTMLElement>('label[for="headshot"]')
-            : formRef.current?.elements.namedItem(key);
+        : key === 'headshot'
+          ? formRef.current?.querySelector<HTMLElement>('label[for="headshot"]')
+          : formRef.current?.elements.namedItem(key);
     const el = target instanceof HTMLElement ? target : null;
     el?.scrollIntoView({ block: 'center' });
     el?.focus?.();
   }
 
   function handleSubmit(formData: FormData) {
-    const found = validate(fields, agreed, headshot);
+    const found = validate(fields, headshot);
     setProblems(found);
     if (Object.keys(found).length) {
       goToFirstProblem(found);
@@ -505,9 +493,6 @@ export default function WebForm() {
           We message on <span className="font-semibold text-white">Instagram</span> and by{' '}
           <span className="font-semibold text-white">email</span> — so keep an eye on your DMs
           (including message requests) and your spam folder.
-        </p>
-        <p className="mx-auto mt-3 max-w-xs text-xs leading-relaxed text-[#666]">
-          Remember: you&apos;ve agreed to bring at least two people if you&apos;re booked.
         </p>
         <a
           href={`https://instagram.com/${SHOW_INSTAGRAM}`}
@@ -720,41 +705,6 @@ export default function WebForm() {
           We&apos;ll answer when we get back to you.
         </p>
       </div>
-
-      {/* The condition of playing the show, so it sits with the button rather
-          than after the submission, where the honest answer could be no. */}
-      <label
-        className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition ${
-          problems.agreed
-            ? 'border-red-500/70 bg-red-500/5'
-            : agreed
-              ? 'border-[#DC143C] bg-[#DC143C]/10'
-              : 'border-[#2a2a2a] bg-[#0a0a0a] hover:border-[#DC143C]/60'
-        }`}
-      >
-        <input
-          ref={agreedRef}
-          type="checkbox"
-          name="agreed"
-          checked={agreed}
-          onChange={(e) => {
-            setAgreed(e.target.checked);
-            if (e.target.checked) clearProblem('agreed');
-          }}
-          aria-invalid={!!problems.agreed}
-          aria-describedby={problems.agreed ? 'agreed-error' : undefined}
-          className="mt-0.5 h-5 w-5 shrink-0 accent-[#DC143C]"
-        />
-        <span className="text-sm leading-relaxed text-white">
-          I&apos;ll bring at least <strong>two people</strong> to the show. *
-          <span className="mt-1 block text-xs text-[#888]">
-            The show is <strong className="font-semibold text-[#aaa]">free</strong> and there&apos;s{' '}
-            <strong className="font-semibold text-[#aaa]">no drink minimum</strong>
-            {' — '}it&apos;s how we fill the room.
-          </span>
-        </span>
-      </label>
-      <FieldError id="agreed-error" message={problems.agreed} />
 
       <button
         type="submit"
