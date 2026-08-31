@@ -39,8 +39,6 @@ export async function submitWebForm(
   const headshotFile = formData.get('headshot') as File | null;
   const questions = (formData.get('questions') as string)?.trim().slice(0, 1000) || null;
 
-  const agreed_bring_two = formData.get('agreed') === 'on';
-
   const tattooAnswer = formData.get('has_tattoos');
   const has_tattoos =
     tattooAnswer === 'yes' ? true : tattooAnswer === 'no' ? false : null;
@@ -59,7 +57,6 @@ export async function submitWebForm(
   if (!instagram) missing.push('your Instagram');
   if (!location) missing.push('where you’re located');
   if (has_tattoos === null) missing.push('the tattoo question');
-  if (!agreed_bring_two) missing.push('your agreement to bring two people');
   if (!headshotFile || headshotFile.size === 0) missing.push('a headshot');
 
   if (missing.length) {
@@ -100,7 +97,6 @@ export async function submitWebForm(
       video_url,
       headshot_url,
       has_tattoos,
-      agreed_bring_two,
       questions,
       source: 'web',
     });
