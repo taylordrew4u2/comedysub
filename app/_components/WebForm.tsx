@@ -516,7 +516,6 @@ export default function WebForm() {
       action={handleSubmit}
       noValidate
       className="space-y-5"
-      encType="multipart/form-data"
     >
       <div ref={topRef} className="scroll-mt-6" aria-live="polite">
         {state.error && (
